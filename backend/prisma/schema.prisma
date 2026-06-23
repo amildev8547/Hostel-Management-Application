@@ -1,0 +1,186 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  email         String         @unique
+  password      String
+  name          String
+  role          String         @default("OWNER")
+  branches      Branch[]
+  notifications Notification[]
+  settings      Setting[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("users")
+}
+
+model Branch {
+  id                   String                 @id @default(auto()) @map("_id") @db.ObjectId
+  name                 String
+  address              String
+  phone                String
+  googleMapsLocation   String?
+  rentDueDay           Int                    @default(5)
+  status               String                 @default("ACTIVE") // ACTIVE, INACTIVE
+  userId               String                 @db.ObjectId
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rooms                Room[]
+  admissionApplications AdmissionApplication[]
+  payments             Payment[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@map("branches")
+}
+
+model Room {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  roomNumber   String
+  floor        String
+  roomType     String   // 2 Share, 3 Share, 4 Share, 5 Share, Custom
+  capacity     Int
+  monthlyRent  Float
+  admissionFee Float
+  status       String   @default("AVAILABLE") // AVAILABLE, PARTIAL, FULL, MAINTENANCE
+  branchId     String   @db.ObjectId
+  branch       Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  tenants      Tenant[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("rooms")
+}
+
+model Tenant {
+  id                   String      @id @default(auto()) @map("_id") @db.ObjectId
+  name                 String
+  phone                String
+  whatsappNumber       String
+  address              String
+  guardianName         String
+  guardianPhone        String
+  nearestPoliceStation String
+  occupation           String
+  workLocation         String
+  joiningDate          DateTime
+  leavingDate          DateTime?
+  status               String      @default("ACTIVE") // ACTIVE, VACATED
+  profilePhotoUrl      String?
+  aadhaarFrontUrl      String?
+  aadhaarBackUrl       String?
+  roomId               String      @db.ObjectId
+  room                 Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  payments             Payment[]
+  documents            Document[]
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@map("tenants")
+}
+
+model AdmissionApplication {
+  id                   String     @id @default(auto()) @map("_id") @db.ObjectId
+  name                 String
+  phone                String
+  whatsappNumber       String
+  address              String
+  guardianName         String
+  guardianPhone        String
+  nearestPoliceStation String
+  occupation           String
+  workLocation         String
+  joiningDate          DateTime
+  leavingDate          DateTime?
+  profilePhotoUrl      String?
+  aadhaarFrontUrl      String?
+  aadhaarBackUrl       String?
+  notes                String?
+  preferredRoomType    String
+  status               String     @default("PENDING") // PENDING, APPROVED, REJECTED
+  paymentStatus        String     @default("PENDING") // PENDING, PAID
+  paymentId            String?    // Razorpay payment ID
+  branchId             String     @db.ObjectId
+  branch               Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  payments             Payment[]
+  documents            Document[]
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  @@map("admission_applications")
+}
+
+model Payment {
+  id                     String                @id @default(auto()) @map("_id") @db.ObjectId
+  amount                 Float
+  status                 String                @default("PENDING") // PAID, PENDING, OVERDUE
+  paymentType            String                // RENT, ADMISSION
+  daysBilled             Int?                  // Number of days this RENT invoice covers (for partial stays)
+  originalAmount         Float?                // Prorated amount before discount was applied
+  discountAmount         Float                 @default(0)
+  dueDate                DateTime
+  paidDate               DateTime?
+  paymentMethod          String?               // RAZORPAY, CASH
+  transactionId          String?
+  paymentLinkId          String?
+  paymentLinkUrl         String?
+  receiptUrl             String?
+  tenantId               String?               @db.ObjectId
+  tenant                 Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  admissionApplicationId String?               @db.ObjectId
+  admissionApplication   AdmissionApplication? @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
+  branchId               String                @db.ObjectId
+  branch                 Branch                @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  @@map("payments")
+}
+
+model Document {
+  id                     String                @id @default(auto()) @map("_id") @db.ObjectId
+  fileName               String
+  fileType               String                // PROFILE_PHOTO, AADHAAR_FRONT, AADHAAR_BACK
+  s3Key                  String
+  s3Bucket               String
+  tenantId               String?               @db.ObjectId
+  tenant                 Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  admissionApplicationId String?               @db.ObjectId
+  admissionApplication   AdmissionApplication? @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  @@map("documents")
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  type      String   // NEW_ADMISSION, ADMISSION_PAYMENT_RECEIVED, RENT_PAYMENT_RECEIVED, ADMISSION_APPROVED, TENANT_VACATED
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model Setting {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  key       String
+  value     String
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
