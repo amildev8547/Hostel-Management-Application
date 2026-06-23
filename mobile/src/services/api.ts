@@ -16,15 +16,21 @@ function getDevServerHost(): string | null {
 
 const devHost = getDevServerHost();
 
+// Live backend deployed on Render. Production builds (and any build without
+// a dev server attached) always talk to this instead of localhost.
+const PRODUCTION_API_BASE_URL = 'https://hostel-management-application-9xxh.onrender.com/api';
+
 // On Android Emulator (no devHost available), localhost maps to 10.0.2.2.
 // On iOS Simulator / Web, it maps to localhost.
 // On a physical device, devHost (the dev server's LAN IP) is used.
-const API_BASE_URL = Platform.select({
-  web: 'http://localhost:5000/api',
-  android: `http://${devHost ?? '10.0.2.2'}:5000/api`,
-  ios: `http://${devHost ?? 'localhost'}:5000/api`,
-  default: 'http://localhost:5000/api',
-});
+const API_BASE_URL = __DEV__
+  ? Platform.select({
+      web: 'http://localhost:5000/api',
+      android: `http://${devHost ?? '10.0.2.2'}:5000/api`,
+      ios: `http://${devHost ?? 'localhost'}:5000/api`,
+      default: 'http://localhost:5000/api',
+    })
+  : PRODUCTION_API_BASE_URL;
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
