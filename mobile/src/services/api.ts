@@ -1,36 +1,9 @@
 import axios from 'axios';
 import { getToken, clearSession } from './storage';
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
 
-// When running in Expo Go (on an emulator or a physical device over Wi-Fi),
-// the dev server's host IP is the same one the phone used to load the JS bundle.
-// This lets physical devices reach the backend without hardcoding a LAN IP.
-function getDevServerHost(): string | null {
-  const hostUri =
-    Constants.expoConfig?.hostUri ||
-    (Constants as any).expoGoConfig?.debuggerHost ||
-    (Constants as any).manifest2?.extra?.expoClient?.hostUri;
-  return hostUri ? hostUri.split(':')[0] : null;
-}
-
-const devHost = getDevServerHost();
-
-// Live backend deployed on Render. Production builds (and any build without
-// a dev server attached) always talk to this instead of localhost.
-const PRODUCTION_API_BASE_URL = 'https://hostel-management-application-9xxh.onrender.com/api';
-
-// On Android Emulator (no devHost available), localhost maps to 10.0.2.2.
-// On iOS Simulator / Web, it maps to localhost.
-// On a physical device, devHost (the dev server's LAN IP) is used.
-const API_BASE_URL = __DEV__
-  ? Platform.select({
-      web: 'http://localhost:5000/api',
-      android: `http://${devHost ?? '10.0.2.2'}:5000/api`,
-      ios: `http://${devHost ?? 'localhost'}:5000/api`,
-      default: 'http://localhost:5000/api',
-    })
-  : PRODUCTION_API_BASE_URL;
+// Live backend deployed on Render. Used everywhere, including Expo Go/dev
+// builds, so admission links and QR codes always point to the live server.
+const API_BASE_URL = 'https://hostel-management-application-9xxh.onrender.com/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
