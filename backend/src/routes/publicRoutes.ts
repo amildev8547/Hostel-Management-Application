@@ -366,25 +366,40 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
                 amount: roomFeeMap[preferredRoomTypeInput.value] ?? cheapestOverallFee // Display only; server recomputes the real fee
               };
 
-              const response = await fetch('/api/admissions/apply', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-              });
+              let response;
+              try {
+                response = await fetch('/api/admissions/apply', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload)
+                });
+              } catch (networkErr) {
+                console.error(networkErr);
+                alert('Could not reach the server. Please check your internet connection and try again.');
+                submitBtn.disabled = false;
+                overlay.style.display = 'none';
+                return;
+              }
 
               const result = await response.json();
 
               if (response.ok) {
                 // Redirect applicant to payment page (Razorpay or simulated portal)
                 window.location.href = result.paymentLink;
+              } else if (Array.isArray(result.details) && result.details.length > 0) {
+                // Validation errors: show exactly which field failed and why.
+                const fieldMessages = result.details.map(d => '- ' + d.message).join('\n');
+                alert('Please fix the following:\n' + fieldMessages);
+                submitBtn.disabled = false;
+                overlay.style.display = 'none';
               } else {
-                alert('Submission failed: ' + (result.error || 'Server error'));
+                alert('Submission failed: ' + (result.error || 'Unexpected server error. Please try again.'));
                 submitBtn.disabled = false;
                 overlay.style.display = 'none';
               }
             } catch (err) {
               console.error(err);
-              alert('An error occurred during submission.');
+              alert('An error occurred while preparing your submission. Please check your files and try again.');
               submitBtn.disabled = false;
               overlay.style.display = 'none';
             }

@@ -7,7 +7,9 @@ const API_BASE_URL = 'https://hostel-management-application-9xxh.onrender.com/ap
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  // Render's free tier can take 30-50s to wake from a cold start, so this
+  // needs more headroom than a typical API timeout to avoid false failures.
+  timeout: 45000,
   headers: {
     'Content-Type': 'application/json',
   },

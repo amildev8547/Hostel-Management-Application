@@ -19,6 +19,24 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function getLoginErrorMessage(error: any): string {
+  const data = error.response?.data;
+
+  if (Array.isArray(data?.details) && data.details.length > 0) {
+    return data.details.map((d: { message: string }) => d.message).join('\n');
+  }
+  if (data?.error) {
+    return data.error;
+  }
+  if (error.code === 'ECONNABORTED') {
+    return 'Request timed out. The server may be waking up after inactivity — please try again in a moment.';
+  }
+  if (!error.response) {
+    return 'Could not reach the server. Please check your internet connection and try again.';
+  }
+  return 'Authentication failed. Please try again.';
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,8 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await storage.setUser(loggedUser);
       setUserState(loggedUser);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.error || 'Authentication failed';
-      throw new Error(errorMsg);
+      throw new Error(getLoginErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
