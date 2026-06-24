@@ -24,6 +24,9 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      "./plugins/withWhatsAppQueries"
+    ],
     "extra": {
       "eas": {
         "projectId": "7a849c63-29d0-40c8-83c6-e5a08c77aea7"
