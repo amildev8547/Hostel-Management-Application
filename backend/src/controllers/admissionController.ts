@@ -3,6 +3,7 @@ import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
 import { uploadFile } from '../services/cloudinary';
 import { updateRoomOccupancyStatus } from '../utils/occupancy';
+import { buildUpiPaymentUrl, getSettingValue } from '../utils/upi';
 
 // Public endpoint: Submit application
 export async function submitAdmissionApplication(req: Request, res: Response) {
@@ -31,6 +32,11 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     currentStep = 'checking selected branch';
     const branch = await prisma.branch.findUnique({
       where: { id: branchId },
+      include: {
+        user: {
+          include: { settings: true },
+        },
+      },
     });
 
     if (!branch) {
@@ -128,19 +134,29 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
 
     currentStep = 'saving manual payment page';
     const manualPaymentUrl = `${requestBaseUrl}/pay/${payment.id}`;
+    const upiPaymentUrl = buildUpiPaymentUrl({
+      upiId: getSettingValue(branch.user.settings, 'payment_upi_id'),
+      receiverName: getSettingValue(branch.user.settings, 'payment_receiver_name') || branch.user.name || branch.name,
+      amount,
+      note: `HostelHub ADMISSION ${payment.id}`,
+    });
     await prisma.payment.update({
       where: { id: payment.id },
       data: {
         paymentMethod: 'UPI',
-        paymentLinkUrl: manualPaymentUrl,
+        paymentLinkUrl: upiPaymentUrl || manualPaymentUrl,
       },
     });
 
     res.status(201).json({
       applicationId: application.id,
       paymentId: payment.id,
-      paymentLink: manualPaymentUrl,
-      message: 'Application recorded. Please pay by UPI and share the screenshot on WhatsApp.',
+      paymentLink: upiPaymentUrl || manualPaymentUrl,
+      upiPaymentLink: upiPaymentUrl,
+      manualPaymentLink: manualPaymentUrl,
+      message: upiPaymentUrl
+        ? 'Application recorded. Opening UPI payment link.'
+        : 'Application recorded. Please pay by UPI and share the screenshot on WhatsApp.',
     });
   } catch (error) {
     console.error('Submit admission application error:', error);

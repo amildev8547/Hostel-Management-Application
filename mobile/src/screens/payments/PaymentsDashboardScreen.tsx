@@ -242,7 +242,9 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
   const handleShareManualPayment = async (payment: any) => {
     setIsProcessing(true);
     try {
-      const payUrl = `${getBackendBaseUrl()}/pay/${payment.id}`;
+      const linkResponse = await apiClient.post(`/payments/${payment.id}/link`);
+      const upiPaymentUrl = linkResponse.data.upiPaymentUrl || '';
+      const manualPaymentUrl = linkResponse.data.manualPaymentUrl || `${getBackendBaseUrl()}/pay/${payment.id}`;
 
       const tenantName = payment.tenant?.name || 'Tenant';
       const phone = payment.tenant?.whatsappNumber || payment.tenant?.phone || '';
@@ -259,13 +261,16 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
         `💰 *Amount: ₹${payment.amount}*`,
         `📅 Due Date: ${new Date(payment.dueDate).toLocaleDateString('en-IN')}`,
         ``,
-        `Please pay through UPI using this page:`,
-        payUrl,
+        upiPaymentUrl ? `Tap this UPI link to pay:` : `Please pay through UPI using this page:`,
+        upiPaymentUrl || manualPaymentUrl,
         ``,
+        upiPaymentUrl ? `If the UPI link does not open, use this page:` : '',
+        upiPaymentUrl ? manualPaymentUrl : '',
+        upiPaymentUrl ? `` : '',
         `After payment, send the UPI screenshot in this WhatsApp chat.`,
         ``,
         `— HostelHub`,
-      ].join('\n');
+      ].filter((line) => line !== '').join('\n');
 
       const whatsappUrl = phone
         ? `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`

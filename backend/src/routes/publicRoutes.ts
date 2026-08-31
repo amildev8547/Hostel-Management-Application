@@ -549,8 +549,8 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
               const result = await parseResponse(response);
 
               if (response.ok) {
-                showMessage('success', 'Application submitted successfully. Opening payment page...');
-                setSubmitting(true, 'Application saved. Opening payment page...');
+                showMessage('success', 'Application submitted successfully. Opening UPI payment...');
+                setSubmitting(true, 'Application saved. Opening UPI payment...');
                 setTimeout(() => {
                   window.location.href = result.paymentLink;
                 }, 900);

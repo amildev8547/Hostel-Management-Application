@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
+import { buildUpiPaymentUrl, getSettingValue } from '../utils/upi';
 
 export async function getPayments(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
@@ -232,7 +233,13 @@ export async function getManualPaymentLink(req: AuthenticatedRequest, res: Respo
       include: {
         tenant: { include: { room: { include: { branch: true } } } },
         admissionApplication: true,
-        branch: true,
+        branch: {
+          include: {
+            user: {
+              include: { settings: true },
+            },
+          },
+        },
       },
     });
 
@@ -245,16 +252,27 @@ export async function getManualPaymentLink(req: AuthenticatedRequest, res: Respo
     }
 
     const manualPaymentUrl = `${process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`}/pay/${payment.id}`;
+    const upiPaymentUrl = buildUpiPaymentUrl({
+      upiId: getSettingValue(payment.branch.user.settings, 'payment_upi_id'),
+      receiverName: getSettingValue(payment.branch.user.settings, 'payment_receiver_name') || payment.branch.user.name || payment.branch.name,
+      amount: payment.amount,
+      note: `HostelHub ${payment.paymentType} ${payment.id}`,
+    });
 
     const updated = await prisma.payment.update({
       where: { id },
       data: {
         paymentMethod: 'UPI',
-        paymentLinkUrl: manualPaymentUrl,
+        paymentLinkUrl: upiPaymentUrl || manualPaymentUrl,
       },
     });
 
-    res.json(updated);
+    res.json({
+      ...updated,
+      upiPaymentUrl,
+      manualPaymentUrl,
+      paymentLinkUrl: upiPaymentUrl || manualPaymentUrl,
+    });
   } catch (error) {
     console.error('Get manual payment link error:', error);
     res.status(500).json({ error: 'Failed to prepare manual payment link' });
