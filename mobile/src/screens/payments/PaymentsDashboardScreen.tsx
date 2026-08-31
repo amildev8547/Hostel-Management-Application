@@ -238,16 +238,11 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
     }
   };
 
-  // ── Share via WhatsApp with Payment Link ──────────────────────────────
-  const handleSharePaymentLink = async (payment: any) => {
+  // Share manual UPI payment instructions through WhatsApp.
+  const handleShareManualPayment = async (payment: any) => {
     setIsProcessing(true);
     try {
-      // 1. Generate payment link (creates Razorpay link or sandbox mock link)
-      const linkResponse = await apiClient.post(`/payments/${payment.id}/link`);
-      const paymentLinkUrl = linkResponse.data.paymentLinkUrl;
-
-      // Build the payment URL — prefer the Razorpay link, fall back to sandbox
-      const payUrl = paymentLinkUrl || `${getBackendBaseUrl()}/pay/${payment.id}`;
+      const payUrl = `${getBackendBaseUrl()}/pay/${payment.id}`;
 
       const tenantName = payment.tenant?.name || 'Tenant';
       const phone = payment.tenant?.whatsappNumber || payment.tenant?.phone || '';
@@ -256,7 +251,6 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
         ? `Room ${payment.tenant.room.roomNumber}`
         : '';
 
-      // 2. Compose a friendly WhatsApp message with the payment link on its own line
       const message = [
         `Hello ${tenantName},`,
         ``,
@@ -265,13 +259,14 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
         `💰 *Amount: ₹${payment.amount}*`,
         `📅 Due Date: ${new Date(payment.dueDate).toLocaleDateString('en-IN')}`,
         ``,
-        `Pay securely here:`,
+        `Please pay through UPI using this page:`,
         payUrl,
+        ``,
+        `After payment, send the UPI screenshot in this WhatsApp chat.`,
         ``,
         `— HostelHub`,
       ].join('\n');
 
-      // 3. Open WhatsApp with pre-filled message
       const whatsappUrl = phone
         ? `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`
         : `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -280,11 +275,11 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
       if (canOpen) {
         await Linking.openURL(whatsappUrl);
       } else {
-        showAlert('WhatsApp is not installed on this device. The payment link has been generated — you can copy and share it manually.');
+        showAlert('WhatsApp is not installed on this device. Share the manual UPI payment page with the tenant.');
       }
     } catch (err: any) {
       console.error(err);
-      showAlert(err.response?.data?.error || 'Failed to generate payment link');
+      showAlert(err.response?.data?.error || 'Failed to share manual payment instructions');
     } finally {
       setIsProcessing(false);
     }
@@ -444,7 +439,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
                             iconColor="#25D366"
                             size={20}
                             style={styles.actionIconButton}
-                            onPress={() => handleSharePaymentLink(pay)}
+                            onPress={() => handleShareManualPayment(pay)}
                           />
                           <IconButton
                             icon="check-circle-outline"

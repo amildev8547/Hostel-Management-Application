@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
 import { uploadFile } from '../services/cloudinary';
-import { createPaymentLink } from '../services/razorpay';
 import { updateRoomOccupancyStatus } from '../utils/occupancy';
 
 // Public endpoint: Submit application
@@ -127,32 +126,21 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
       },
     });
 
-    // 5. Generate Razorpay payment link
-    currentStep = 'creating payment link';
-    const payLink = await createPaymentLink({
-      paymentId: payment.id,
-      amount,
-      description: `Admission Fee - ${name} (${branch.name})`,
-      customerName: name,
-      customerPhone: phone,
-      customerEmail: `${phone}@hostelhub.app`,
-    });
-
-    // Update payment with link details
-    currentStep = 'saving payment link';
+    currentStep = 'saving manual payment page';
+    const manualPaymentUrl = `${requestBaseUrl}/pay/${payment.id}`;
     await prisma.payment.update({
       where: { id: payment.id },
       data: {
-        paymentLinkId: payLink.id,
-        paymentLinkUrl: payLink.url,
+        paymentMethod: 'UPI',
+        paymentLinkUrl: manualPaymentUrl,
       },
     });
 
     res.status(201).json({
       applicationId: application.id,
       paymentId: payment.id,
-      paymentLink: payLink.url,
-      message: 'Application recorded. Please complete payment using the link.',
+      paymentLink: manualPaymentUrl,
+      message: 'Application recorded. Please pay by UPI and share the screenshot on WhatsApp.',
     });
   } catch (error) {
     console.error('Submit admission application error:', error);

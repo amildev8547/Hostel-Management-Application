@@ -1,7 +1,6 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
-import { createPaymentLink, verifyWebhookSignature } from '../services/razorpay';
 
 export async function getPayments(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
@@ -220,8 +219,8 @@ export async function editPaymentAmount(req: AuthenticatedRequest, res: Response
   }
 }
 
-// Generate payment link for a specific invoice
-export async function triggerPaymentLink(req: AuthenticatedRequest, res: Response) {
+// Return the manual UPI payment page for a specific invoice.
+export async function getManualPaymentLink(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
   const userId = req.user?.id;
 
@@ -245,34 +244,20 @@ export async function triggerPaymentLink(req: AuthenticatedRequest, res: Respons
       return res.status(400).json({ error: 'Invoice has already been paid' });
     }
 
-    // Generate link
-    const name = payment.tenant?.name || payment.admissionApplication?.name || 'Valued Tenant';
-    const phone = payment.tenant?.phone || payment.admissionApplication?.phone || '0000000000';
-    const desc = payment.paymentType === 'RENT'
-      ? `Rent Payment - Room ${payment.tenant?.room.roomNumber} (${payment.branch.name})`
-      : `Admission Payment - ${payment.admissionApplication?.name}`;
-
-    const linkData = await createPaymentLink({
-      paymentId: payment.id,
-      amount: payment.amount,
-      description: desc,
-      customerName: name,
-      customerPhone: phone,
-      customerEmail: `${phone}@hostelhub.app`,
-    });
+    const manualPaymentUrl = `${process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`}/pay/${payment.id}`;
 
     const updated = await prisma.payment.update({
       where: { id },
       data: {
-        paymentLinkId: linkData.id,
-        paymentLinkUrl: linkData.url,
+        paymentMethod: 'UPI',
+        paymentLinkUrl: manualPaymentUrl,
       },
     });
 
     res.json(updated);
   } catch (error) {
-    console.error('Trigger payment link error:', error);
-    res.status(500).json({ error: 'Failed to generate payment link' });
+    console.error('Get manual payment link error:', error);
+    res.status(500).json({ error: 'Failed to prepare manual payment link' });
   }
 }
 
@@ -320,33 +305,7 @@ Pay Here: ${payUrl}`;
   }
 }
 
-// Razorpay Callback: When client redirects
-export async function handleCallback(req: Request, res: Response) {
-  // Simple success landing page response
-  res.send(`
-    <html>
-      <head>
-        <title>Payment Successful</title>
-        <style>
-          body { font-family: sans-serif; text-align: center; padding-top: 10%; background: #f3f4f6; }
-          .card { background: white; padding: 2rem; border-radius: 8px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-          h1 { color: #10B981; margin-bottom: 0.5rem; }
-          p { color: #4B5563; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <h1>Payment Received!</h1>
-          <p>Thank you. Your HostelHub payment has been successfully recorded.</p>
-          <p style="font-size: 0.8rem; margin-top: 2rem;">You can safely close this browser window now.</p>
-        </div>
-      </body>
-    </html>
-  `);
-}
-
-// Webhook logic handler (shared between real webhook and dev simulation)
-export async function processPaymentSuccess(paymentId: string, transactionId: string, method = 'RAZORPAY') {
+export async function processPaymentSuccess(paymentId: string, transactionId: string, method = 'UPI') {
   const payment = await prisma.payment.findUnique({
     where: { id: paymentId },
     include: {
@@ -422,73 +381,6 @@ export async function processPaymentSuccess(paymentId: string, transactionId: st
   }
 
   return updatedPayment;
-}
-
-// Razorpay Webhook listener (real)
-export async function handleWebhook(req: Request, res: Response) {
-  const signature = req.headers['x-razorpay-signature'] as string;
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || 'rzp_webhook_secret';
-
-  // Verify signature
-  const isValid = verifyWebhookSignature(JSON.stringify(req.body), signature, webhookSecret);
-
-  if (!isValid) {
-    return res.status(400).json({ error: 'Invalid webhook signature' });
-  }
-
-  const event = req.body.event;
-
-  try {
-    if (event === 'payment_link.paid' || event === 'payment.captured') {
-      const payload = req.body.payload;
-      let paymentLinkId = '';
-      let transactionId = '';
-
-      if (event === 'payment_link.paid') {
-        paymentLinkId = payload.payment_link.entity.id;
-        transactionId = payload.payment.entity.id;
-      } else {
-        transactionId = payload.payment.entity.id;
-      }
-
-      // Retrieve payment by link ID
-      const payment = await prisma.payment.findFirst({
-        where: {
-          OR: [
-            { paymentLinkId: paymentLinkId },
-            { transactionId: transactionId },
-          ],
-        },
-      });
-
-      if (payment) {
-        await processPaymentSuccess(payment.id, transactionId);
-      }
-    }
-
-    res.json({ status: 'ok' });
-  } catch (error) {
-    console.error('Webhook processing error:', error);
-    res.status(500).json({ error: 'Webhook processing failed' });
-  }
-}
-
-// Simulation Endpoint: Trigger simulated payment webhooks for sandbox testing
-export async function simulateWebhook(req: Request, res: Response) {
-  const { paymentId } = req.params;
-
-  try {
-    const mockTxnId = `pay_mock_${Math.random().toString(36).substring(2, 10)}`;
-    const result = await processPaymentSuccess(paymentId, mockTxnId, 'SIMULATED');
-
-    res.json({
-      message: 'Simulated payment webhook parsed and executed successfully',
-      payment: result,
-    });
-  } catch (error: any) {
-    console.error('Simulated webhook failed:', error);
-    res.status(500).json({ error: error.message || 'Simulation failed' });
-  }
 }
 
 // Manual payment trigger by owner

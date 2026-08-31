@@ -12,6 +12,14 @@ function escapeHtml(value: string | number | null | undefined) {
     .replace(/'/g, '&#39;');
 }
 
+function onlyDigits(value: string | null | undefined) {
+  return String(value ?? '').replace(/\D/g, '');
+}
+
+function settingValue(settings: { key: string; value: string }[] | undefined, key: string) {
+  return settings?.find((setting) => setting.key === key)?.value?.trim() || '';
+}
+
 // 1. GET /apply/:branchId - Renders the public admission form
 router.get('/apply/:branchId', async (req: Request, res: Response) => {
   const { branchId } = req.params;
@@ -573,19 +581,56 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
   }
 });
 
-// 2. GET /pay/:paymentId - Renders the Razorpay simulated payment screen
+// 2. GET /pay/:paymentId - Renders the manual UPI payment instruction page
 router.get('/pay/:paymentId', async (req: Request, res: Response) => {
   const { paymentId } = req.params;
 
   try {
     const payment = await prisma.payment.findUnique({
       where: { id: paymentId },
-      include: { branch: true },
+      include: {
+        branch: {
+          include: {
+            user: {
+              include: { settings: true },
+            },
+          },
+        },
+        tenant: { include: { room: true } },
+        admissionApplication: true,
+      },
     });
 
     if (!payment) {
       return res.status(404).send('<h1>Invoice details not found</h1>');
     }
+
+    const settings = payment.branch.user.settings;
+    const upiId = settingValue(settings, 'payment_upi_id');
+    const receiverName = settingValue(settings, 'payment_receiver_name') || payment.branch.user.name || payment.branch.name;
+    const ownerWhatsapp = onlyDigits(settingValue(settings, 'payment_whatsapp_number'));
+    const payerName = payment.tenant?.name || payment.admissionApplication?.name || 'Applicant';
+    const payerPhone = payment.tenant?.whatsappNumber || payment.tenant?.phone || payment.admissionApplication?.whatsappNumber || payment.admissionApplication?.phone || '';
+    const roomLabel = payment.tenant?.room?.roomNumber ? `Room ${payment.tenant.room.roomNumber}` : 'Admission Application';
+    const paymentNote = `HostelHub ${payment.paymentType} ${payment.id}`;
+    const upiUrl = upiId
+      ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(receiverName)}&am=${encodeURIComponent(String(payment.amount))}&cu=INR&tn=${encodeURIComponent(paymentNote)}`
+      : '';
+    const whatsappMessage = [
+      `Hello, I have submitted the payment screenshot.`,
+      ``,
+      `Name: ${payerName}`,
+      `Branch: ${payment.branch.name}`,
+      `For: ${payment.paymentType} - ${roomLabel}`,
+      `Amount: Rs ${payment.amount}`,
+      `Invoice ID: ${payment.id}`,
+      `Phone: ${payerPhone || 'N/A'}`,
+      ``,
+      `I will attach the UPI payment screenshot in this chat.`,
+    ].join('\n');
+    const whatsappUrl = ownerWhatsapp
+      ? `https://wa.me/91${ownerWhatsapp}?text=${encodeURIComponent(whatsappMessage)}`
+      : `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`;
 
     res.send(`
       <!DOCTYPE html>
@@ -593,151 +638,193 @@ router.get('/pay/:paymentId', async (req: Request, res: Response) => {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Razorpay Checkout Simulation</title>
+        <title>Manual UPI Payment - HostelHub</title>
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
         <style>
+          :root {
+            --primary: #2563EB;
+            --primary-dark: #1D4ED8;
+            --success: #059669;
+            --warning-bg: #FFFBEB;
+            --warning-border: #FDE68A;
+            --text: #111827;
+            --muted: #6B7280;
+            --border: #E5E7EB;
+          }
+          * { box-sizing: border-box; }
           body {
             font-family: 'Outfit', sans-serif;
-            background: #F3F4F6;
+            background: #F8FAFC;
             padding: 2rem 1rem;
-            color: #1F2937;
+            color: var(--text);
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 90vh;
+            min-height: 100vh;
+            margin: 0;
           }
-          .checkout-card {
+          .payment-card {
             background: white;
             border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            max-width: 420px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+            max-width: 480px;
             width: 100%;
             overflow: hidden;
-            border: 1px solid #E5E7EB;
+            border: 1px solid var(--border);
           }
           .header {
-            background: #0B2545;
+            background: #0F172A;
             color: white;
             padding: 1.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
           }
-          .header h1 { font-size: 1.1rem; font-weight: 700; margin: 0; }
-          .header .logo { font-style: italic; color: #10B981; }
+          .header h1 { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.35rem; }
+          .header p { margin: 0; color: #CBD5E1; font-size: 0.9rem; }
           .content { padding: 1.5rem; }
           .amount-section {
             text-align: center;
-            padding: 1rem 0;
-            border-bottom: 1px solid #E5E7EB;
-            margin-bottom: 1rem;
+            padding: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #F8FAFC;
+            margin-bottom: 1.25rem;
           }
-          .amount { font-size: 2.2rem; font-weight: 700; color: #0B2545; }
-          .desc { font-size: 0.9rem; color: #6B7280; }
+          .amount { font-size: 2.3rem; font-weight: 800; color: var(--primary); }
+          .desc { font-size: 0.9rem; color: var(--muted); margin-top: 0.25rem; }
           .detail-row {
             display: flex;
             justify-content: space-between;
             font-size: 0.9rem;
             margin-bottom: 0.75rem;
+            gap: 1rem;
           }
-          .label { color: #6B7280; }
-          .val { font-weight: 600; }
-          .sandbox-badge {
-            background: #FEF3C7;
-            color: #D97706;
-            font-size: 0.75rem;
+          .label { color: var(--muted); }
+          .val { font-weight: 700; text-align: right; overflow-wrap: anywhere; }
+          .upi-box, .notice {
+            border-radius: 10px;
+            padding: 1rem;
+            margin-top: 1rem;
+          }
+          .upi-box {
+            background: #EFF6FF;
+            border: 1px solid #BFDBFE;
+          }
+          .upi-id {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #1E40AF;
+            overflow-wrap: anywhere;
+          }
+          .notice {
+            background: var(--warning-bg);
+            border: 1px solid var(--warning-border);
+            color: #92400E;
+            font-size: 0.9rem;
             font-weight: 600;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            text-align: center;
-            margin-bottom: 1rem;
           }
-          .btn-pay {
-            background-color: #2F69FC;
-            color: white;
+          .btn {
             border: none;
             width: 100%;
             padding: 1rem;
             font-size: 1rem;
-            font-weight: 600;
-            border-radius: 6px;
+            font-weight: 700;
+            border-radius: 8px;
             cursor: pointer;
-            transition: background 0.2s;
-            margin-top: 1rem;
+            margin-top: 0.75rem;
+            text-decoration: none;
+            display: block;
+            text-align: center;
           }
-          .btn-pay:hover { background-color: #174ED4; }
-          .btn-pay:disabled { background-color: #9CA3AF; cursor: not-allowed; }
+          .btn-primary {
+            background-color: var(--primary);
+            color: white;
+          }
+          .btn-primary:hover { background-color: var(--primary-dark); }
+          .btn-whatsapp {
+            background-color: #16A34A;
+            color: white;
+          }
+          .btn-copy {
+            background-color: #F1F5F9;
+            color: #0F172A;
+            border: none;
+          }
           .footer {
             background: #F9FAFB;
             padding: 0.75rem;
             text-align: center;
             font-size: 0.75rem;
             color: #9CA3AF;
-            border-top: 1px solid #E5E7EB;
+            border-top: 1px solid var(--border);
           }
+          .status { margin-top: 0.75rem; color: var(--success); font-weight: 700; text-align: center; display: none; }
         </style>
       </head>
       <body>
-        <div class="checkout-card">
+        <div class="payment-card">
           <div class="header">
-            <h1>HostelHub Checkout</h1>
-            <span class="logo">razorpay</span>
+            <h1>Pay by UPI</h1>
+            <p>${escapeHtml(payment.branch.name)}</p>
           </div>
           <div class="content">
-            <div class="sandbox-badge">⚠️ TEST RUN: Sandboxed Integration Simulator</div>
-            
             <div class="amount-section">
-              <span class="amount">₹${payment.amount}</span>
-              <div class="desc">${payment.paymentType} Payment due</div>
+              <div class="amount">Rs ${escapeHtml(payment.amount)}</div>
+              <div class="desc">${escapeHtml(payment.paymentType)} payment due</div>
             </div>
 
             <div class="detail-row">
-              <span class="label">Branch Name</span>
-              <span class="val">${payment.branch.name}</span>
+              <span class="label">Name</span>
+              <span class="val">${escapeHtml(payerName)}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">For</span>
+              <span class="val">${escapeHtml(roomLabel)}</span>
             </div>
             <div class="detail-row">
               <span class="label">Invoice ID</span>
-              <span class="val" style="font-size: 0.75rem;">${payment.id}</span>
+              <span class="val" style="font-size: 0.75rem;">${escapeHtml(payment.id)}</span>
             </div>
             <div class="detail-row">
               <span class="label">Due Date</span>
-              <span class="val">${payment.dueDate.toDateString()}</span>
+              <span class="val">${escapeHtml(payment.dueDate.toDateString())}</span>
             </div>
 
-            <button class="btn-pay" id="payBtn" onclick="simulatePayment()">Authorize Mock Payment</button>
+            ${upiId
+              ? `
+                <div class="upi-box">
+                  <div class="label">Pay to UPI ID</div>
+                  <div class="upi-id" id="upiId">${escapeHtml(upiId)}</div>
+                  <div class="label" style="margin-top: 0.5rem;">Receiver</div>
+                  <div class="val" style="text-align: left;">${escapeHtml(receiverName)}</div>
+                </div>
+                <a class="btn btn-primary" href="${escapeHtml(upiUrl)}">Open UPI App</a>
+                <button class="btn btn-copy" type="button" onclick="copyUpi()">Copy UPI ID</button>
+              `
+              : `
+                <div class="notice">
+                  UPI ID is not configured yet. Please contact the hostel owner before paying.
+                </div>
+              `}
+
+            <div class="notice">
+              After payment, take a screenshot from your UPI app. Then open WhatsApp below and attach the screenshot in that chat.
+            </div>
+            <a class="btn btn-whatsapp" href="${escapeHtml(whatsappUrl)}">Share Screenshot on WhatsApp</a>
+            <div class="status" id="copyStatus">UPI ID copied.</div>
           </div>
           <div class="footer">
-            Secured by Razorpay • Simulating Webhook Trigger
+            Owner will verify the screenshot and mark this payment as paid.
           </div>
         </div>
 
         <script>
-          async function simulatePayment() {
-            const btn = document.getElementById('payBtn');
-            btn.disabled = true;
-            btn.innerText = 'Authorizing...';
-
+          async function copyUpi() {
+            const upiId = document.getElementById('upiId')?.innerText || '';
+            const status = document.getElementById('copyStatus');
             try {
-              const response = await fetch('/api/payments/simulate-webhook/${paymentId}', {
-                method: 'POST'
-              });
-              
-              if (response.ok) {
-                btn.innerText = 'Payment Authorized!';
-                btn.style.backgroundColor = '#10B981';
-                setTimeout(() => {
-                  window.location.href = '/api/payments/callback';
-                }, 1000);
-              } else {
-                alert('Webhook simulation failed!');
-                btn.disabled = false;
-                btn.innerText = 'Authorize Mock Payment';
-              }
-            } catch (err) {
-              console.error(err);
-              alert('Error triggering payment simulation.');
-              btn.disabled = false;
-              btn.innerText = 'Authorize Mock Payment';
+              await navigator.clipboard.writeText(upiId);
+              status.style.display = 'block';
+            } catch (error) {
+              window.prompt('Copy this UPI ID', upiId);
             }
           }
         </script>
@@ -746,7 +833,7 @@ router.get('/pay/:paymentId', async (req: Request, res: Response) => {
     `);
   } catch (error) {
     console.error(error);
-    res.status(500).send('<h1>Server error loading payment gateway</h1>');
+    res.status(500).send('<h1>Server error loading payment instructions</h1>');
   }
 });
 

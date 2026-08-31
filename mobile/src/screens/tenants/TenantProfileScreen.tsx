@@ -162,13 +162,11 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
     }
   };
 
-  // Share a payment's amount + payment link to the tenant's WhatsApp number
-  const handleSharePaymentLink = async (pay: any) => {
+  // Share a payment's manual UPI instructions to the tenant's WhatsApp number
+  const handleShareManualPayment = async (pay: any) => {
     setIsProcessing(true);
     try {
-      const linkResponse = await apiClient.post(`/payments/${pay.id}/link`);
-      const paymentLinkUrl = linkResponse.data.paymentLinkUrl;
-      const payUrl = paymentLinkUrl || `${getBackendBaseUrl()}/pay/${pay.id}`;
+      const payUrl = `${getBackendBaseUrl()}/pay/${pay.id}`;
 
       const phone = tenant.whatsappNumber || tenant.phone || '';
       const branchName = tenant.room?.branch?.name || '';
@@ -182,8 +180,10 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
         `💰 *Amount: ₹${pay.amount}*`,
         `📅 Due Date: ${new Date(pay.dueDate).toLocaleDateString('en-IN')}`,
         ``,
-        `Pay securely here:`,
+        `Please pay through UPI using this page:`,
         payUrl,
+        ``,
+        `After payment, send the UPI screenshot in this WhatsApp chat.`,
         ``,
         `— HostelHub`,
       ].join('\n');
@@ -196,11 +196,11 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
       if (canOpen) {
         await Linking.openURL(whatsappUrl);
       } else {
-        showAlert('WhatsApp is not installed on this device. The payment link has been generated — you can copy and share it manually.');
+        showAlert('WhatsApp is not installed on this device. Share the manual UPI payment page with the tenant.');
       }
     } catch (err: any) {
       console.error(err);
-      showAlert(err.response?.data?.error || 'Failed to generate payment link');
+      showAlert(err.response?.data?.error || 'Failed to share manual payment instructions');
     } finally {
       setIsProcessing(false);
     }
@@ -488,7 +488,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
                         icon="whatsapp"
                         iconColor="#25D366"
                         size={18}
-                        onPress={() => handleSharePaymentLink(pay)}
+                        onPress={() => handleShareManualPayment(pay)}
                         style={{ margin: 0 }}
                         disabled={isProcessing}
                       />

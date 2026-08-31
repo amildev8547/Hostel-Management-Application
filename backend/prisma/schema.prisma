@@ -106,7 +106,7 @@ model AdmissionApplication {
   preferredRoomType    String
   status               String     @default("PENDING") // PENDING, APPROVED, REJECTED
   paymentStatus        String     @default("PENDING") // PENDING, PAID
-  paymentId            String?    // Razorpay payment ID
+  paymentId            String?    // Owner-entered/manual payment reference
   branchId             String     @db.ObjectId
   branch               Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
   payments             Payment[]
@@ -127,7 +127,7 @@ model Payment {
   discountAmount         Float                 @default(0)
   dueDate                DateTime
   paidDate               DateTime?
-  paymentMethod          String?               // RAZORPAY, CASH
+  paymentMethod          String?               // UPI, CASH, BANK
   transactionId          String?
   paymentLinkId          String?
   paymentLinkUrl         String?

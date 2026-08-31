@@ -1,14 +1,18 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Surface, Card, List, Switch, Divider, useTheme, Avatar } from 'react-native-paper';
+import { Text, Surface, Card, List, Switch, Divider, useTheme, Avatar, TextInput, Button } from 'react-native-paper';
 import { useAuth } from '../../services/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
+import { showAlert } from '../../utils/alerts';
 
 export default function SettingsScreen() {
   const { user } = useAuth();
   const theme = useTheme();
   const queryClient = useQueryClient();
+  const [upiId, setUpiId] = useState('');
+  const [receiverName, setReceiverName] = useState('');
+  const [paymentWhatsapp, setPaymentWhatsapp] = useState('');
 
   // Load Settings
   const { data: settings } = useQuery<Record<string, string>>({
@@ -30,6 +34,12 @@ export default function SettingsScreen() {
     },
   });
 
+  useEffect(() => {
+    setUpiId(settings?.payment_upi_id || '');
+    setReceiverName(settings?.payment_receiver_name || '');
+    setPaymentWhatsapp(settings?.payment_whatsapp_number || '');
+  }, [settings]);
+
   const handleToggleAutoRent = (value: boolean) => {
     updateSettingMutation.mutate({
       key: 'rent_auto_generate',
@@ -48,6 +58,22 @@ export default function SettingsScreen() {
 
   // Defaults to enabled until the owner explicitly turns it off.
   const notificationAlertsVal = settings?.notification_alerts_enabled !== 'false';
+
+  const handleSavePaymentSettings = async () => {
+    try {
+      await Promise.all([
+        updateSettingMutation.mutateAsync({ key: 'payment_upi_id', value: upiId.trim() }),
+        updateSettingMutation.mutateAsync({ key: 'payment_receiver_name', value: receiverName.trim() }),
+        updateSettingMutation.mutateAsync({
+          key: 'payment_whatsapp_number',
+          value: paymentWhatsapp.replace(/\D/g, '').slice(-10),
+        }),
+      ]);
+      showAlert('Payment settings saved.');
+    } catch (error: any) {
+      showAlert(error.response?.data?.error || 'Failed to save payment settings');
+    }
+  };
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -100,6 +126,48 @@ export default function SettingsScreen() {
               />
             )}
           />
+        </Card.Content>
+      </Card>
+
+      <Text variant="titleMedium" style={styles.sectionTitle}>Manual Payment Details</Text>
+      <Card style={styles.settingsCard}>
+        <Card.Content>
+          <TextInput
+            label="UPI ID"
+            value={upiId}
+            onChangeText={setUpiId}
+            mode="outlined"
+            autoCapitalize="none"
+            placeholder="name@bank"
+            style={styles.input}
+          />
+          <TextInput
+            label="Receiver Name"
+            value={receiverName}
+            onChangeText={setReceiverName}
+            mode="outlined"
+            placeholder="Hostel owner or business name"
+            style={styles.input}
+          />
+          <TextInput
+            label="WhatsApp Number for Screenshots"
+            value={paymentWhatsapp}
+            onChangeText={setPaymentWhatsapp}
+            mode="outlined"
+            keyboardType="phone-pad"
+            placeholder="10 digit number"
+            style={styles.input}
+          />
+          <Button
+            mode="contained"
+            icon="content-save"
+            onPress={handleSavePaymentSettings}
+            loading={updateSettingMutation.isPending}
+            disabled={updateSettingMutation.isPending}
+            style={styles.saveButton}
+          >
+            Save Payment Details
+          </Button>
         </Card.Content>
       </Card>
 
@@ -169,5 +237,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 20,
     overflow: 'hidden',
+  },
+  input: {
+    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  saveButton: {
+    borderRadius: 8,
+    marginTop: 4,
   },
 });

@@ -2,11 +2,8 @@ import { Router } from 'express';
 import {
   getPayments,
   generateMonthlyRentDues,
-  triggerPaymentLink,
+  getManualPaymentLink,
   sendPaymentReminder,
-  handleCallback,
-  handleWebhook,
-  simulateWebhook,
   recordManualPayment,
   customizePaymentAmount,
   editPaymentAmount,
@@ -16,15 +13,10 @@ import { validate, customRentSchema } from '../middlewares/validation';
 
 const router = Router();
 
-// Public / webhook endpoints
-router.get('/callback', handleCallback);
-router.post('/webhook', handleWebhook);
-router.post('/simulate-webhook/:paymentId', simulateWebhook);
-
 // Authenticated owner endpoints
 router.get('/', authenticateJWT, getPayments);
 router.post('/generate-dues', authenticateJWT, generateMonthlyRentDues);
-router.post('/:id/link', authenticateJWT, triggerPaymentLink);
+router.post('/:id/link', authenticateJWT, getManualPaymentLink);
 router.post('/:id/reminder', authenticateJWT, sendPaymentReminder);
 router.post('/:id/record-pay', authenticateJWT, recordManualPayment);
 router.put('/:id/customize', authenticateJWT, validate(customRentSchema), customizePaymentAmount);
