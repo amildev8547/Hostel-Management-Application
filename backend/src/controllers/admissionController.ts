@@ -7,6 +7,7 @@ import { updateRoomOccupancyStatus } from '../utils/occupancy';
 
 // Public endpoint: Submit application
 export async function submitAdmissionApplication(req: Request, res: Response) {
+  let currentStep = 'validating application';
   const {
     name,
     phone,
@@ -28,6 +29,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
   } = req.body;
 
   try {
+    currentStep = 'checking selected branch';
     const branch = await prisma.branch.findUnique({
       where: { id: branchId },
     });
@@ -39,6 +41,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     // The admission fee is always computed server-side from the branch's actual room
     // pricing — never trust a client-supplied amount, since that would let an applicant
     // pay whatever they want by editing the request.
+    currentStep = 'checking room pricing';
     const matchingRoom = await prisma.room.findFirst({
       where: { branchId, roomType: preferredRoomType },
       orderBy: { admissionFee: 'asc' },
@@ -51,12 +54,14 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     // 1. Upload files to S3 / Local storage
     // Use the host the applicant's browser actually used to reach this server, so the
     // stored URL resolves later for the owner too (not just whoever is on localhost).
+    currentStep = 'uploading documents';
     const requestBaseUrl = `${req.protocol}://${req.get('host')}`;
     const profileUpload = await uploadFile(profilePhoto, 'profile.jpg', 'profile_photos', requestBaseUrl);
     const aadhaarFrontUpload = await uploadFile(aadhaarFront, 'aadhaar_front.jpg', 'aadhaar_documents', requestBaseUrl);
     const aadhaarBackUpload = await uploadFile(aadhaarBack, 'aadhaar_back.jpg', 'aadhaar_documents', requestBaseUrl);
 
     // 2. Create AdmissionApplication record
+    currentStep = 'saving application';
     const application = await prisma.admissionApplication.create({
       data: {
         name,
@@ -82,6 +87,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     });
 
     // 3. Save documents registry
+    currentStep = 'saving document records';
     await prisma.document.createMany({
       data: [
         {
@@ -109,6 +115,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     });
 
     // 4. Create internal payment registry
+    currentStep = 'creating payment record';
     const payment = await prisma.payment.create({
       data: {
         amount,
@@ -121,6 +128,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     });
 
     // 5. Generate Razorpay payment link
+    currentStep = 'creating payment link';
     const payLink = await createPaymentLink({
       paymentId: payment.id,
       amount,
@@ -131,6 +139,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     });
 
     // Update payment with link details
+    currentStep = 'saving payment link';
     await prisma.payment.update({
       where: { id: payment.id },
       data: {
@@ -147,7 +156,9 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('Submit admission application error:', error);
-    res.status(500).json({ error: 'Failed to record admission application' });
+    res.status(500).json({
+      error: `Failed while ${currentStep}. Please try again or contact the hostel owner.`,
+    });
   }
 }
 

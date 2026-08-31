@@ -133,6 +133,37 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
             background: #EEF2FF;
             border-color: var(--primary);
           }
+          .message-panel {
+            display: none;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            font-size: 0.92rem;
+            font-weight: 600;
+            white-space: pre-line;
+          }
+          .message-panel.error {
+            display: block;
+            background: #FEF2F2;
+            border-color: #FCA5A5;
+            color: #991B1B;
+          }
+          .message-panel.success {
+            display: block;
+            background: #ECFDF5;
+            border-color: #86EFAC;
+            color: #065F46;
+          }
+          .message-panel.info {
+            display: block;
+            background: #EEF2FF;
+            border-color: #C7D2FE;
+            color: #3730A3;
+          }
+          .help-text {
+            color: var(--text-muted);
+            font-size: 0.78rem;
+          }
           .btn-submit {
             background-color: var(--primary);
             color: white;
@@ -153,8 +184,9 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
           .loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(255, 255, 255, 0.8);
-            display: none; align-items: center; justify-content: center;
+            display: none; align-items: center; justify-content: center; text-align: center;
             font-size: 1.2rem; font-weight: 600; z-index: 1000;
+            padding: 1rem;
           }
         </style>
       </head>
@@ -166,6 +198,8 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
             <p>${escapeHtml(branch.name)} - Branch Application</p>
           </div>
           <form id="admissionForm">
+            <div id="messagePanel" class="message-panel" role="status" aria-live="polite"></div>
+
             <h2 class="section-title">Personal Details</h2>
             <div class="form-group">
               <label for="name">Full Name *</label>
@@ -174,11 +208,13 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
             <div class="form-row">
               <div class="form-group">
                 <label for="phone">Phone Number *</label>
-                <input type="tel" id="phone" required placeholder="9876543210">
+                <input type="tel" id="phone" required inputmode="numeric" minlength="10" placeholder="9876543210">
+                <span class="help-text">Enter a 10 digit mobile number.</span>
               </div>
               <div class="form-group">
                 <label for="whatsappNumber">WhatsApp Number *</label>
-                <input type="tel" id="whatsappNumber" required placeholder="9876543210">
+                <input type="tel" id="whatsappNumber" required inputmode="numeric" minlength="10" placeholder="9876543210">
+                <span class="help-text">Enter the WhatsApp number without country code.</span>
               </div>
             </div>
             <div class="form-group">
@@ -194,7 +230,8 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
               </div>
               <div class="form-group">
                 <label for="guardianPhone">Guardian Phone *</label>
-                <input type="tel" id="guardianPhone" required placeholder="9876543210">
+                <input type="tel" id="guardianPhone" required inputmode="numeric" minlength="10" placeholder="9876543210">
+                <span class="help-text">Enter a 10 digit guardian number.</span>
               </div>
             </div>
             <div class="form-group">
@@ -243,6 +280,7 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
                 <span class="file-label" id="profileLabel">Choose Profile Image</span>
                 <input type="file" id="profilePhoto" accept="image/*" required>
               </div>
+              <span class="help-text">Use JPG or PNG. Large camera photos will be compressed before upload.</span>
             </div>
             <div class="form-row">
               <div class="form-group">
@@ -251,6 +289,7 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
                   <span class="file-label" id="aadhaarFrontLabel">Aadhaar Front Image</span>
                   <input type="file" id="aadhaarFront" accept="image/*" required>
                 </div>
+                <span class="help-text">Upload a clear front-side image.</span>
               </div>
               <div class="form-group">
                 <label>Aadhaar Card Back *</label>
@@ -258,6 +297,7 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
                   <span class="file-label" id="aadhaarBackLabel">Aadhaar Back Image</span>
                   <input type="file" id="aadhaarBack" accept="image/*" required>
                 </div>
+                <span class="help-text">Upload a clear back-side image.</span>
               </div>
             </div>
 
@@ -309,6 +349,86 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
 
           function onlyDigits(value) {
             return String(value || '').replace(/\\D/g, '').slice(-10);
+          }
+
+          const messagePanel = document.getElementById('messagePanel');
+          const submitBtn = document.getElementById('submitBtn');
+          const overlay = document.getElementById('loadingOverlay');
+
+          function showMessage(type, message) {
+            messagePanel.className = 'message-panel ' + type;
+            messagePanel.innerText = message;
+            messagePanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+
+          function clearMessage() {
+            messagePanel.className = 'message-panel';
+            messagePanel.innerText = '';
+          }
+
+          function setSubmitting(isSubmitting, message) {
+            submitBtn.disabled = isSubmitting;
+            overlay.style.display = isSubmitting ? 'flex' : 'none';
+            overlay.innerText = message || 'Processing application, please wait...';
+          }
+
+          async function parseResponse(response) {
+            const text = await response.text();
+            if (!text) return {};
+            try {
+              return JSON.parse(text);
+            } catch (error) {
+              return { error: text.replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim() };
+            }
+          }
+
+          function validateBeforeSubmit() {
+            const errors = [];
+            const requiredFields = [
+              ['name', 'Full name is required.'],
+              ['address', 'Permanent address is required.'],
+              ['guardianName', 'Guardian name is required.'],
+              ['nearestPoliceStation', 'Nearest police station is required.'],
+              ['occupation', 'Occupation is required.'],
+              ['workLocation', 'Work or institution location is required.'],
+              ['joiningDate', 'Expected joining date is required.'],
+            ];
+
+            requiredFields.forEach(([id, message]) => {
+              const value = document.getElementById(id).value.trim();
+              if (!value) errors.push(message);
+            });
+
+            [
+              ['phone', 'Phone number must be exactly 10 digits.'],
+              ['whatsappNumber', 'WhatsApp number must be exactly 10 digits.'],
+              ['guardianPhone', 'Guardian phone must be exactly 10 digits.'],
+            ].forEach(([id, message]) => {
+              if (onlyDigits(document.getElementById(id).value).length !== 10) {
+                errors.push(message);
+              }
+            });
+
+            const joiningDate = document.getElementById('joiningDate').value;
+            const leavingDate = document.getElementById('leavingDate').value;
+            if (joiningDate && leavingDate && leavingDate < joiningDate) {
+              errors.push('Expected leaving date cannot be before joining date.');
+            }
+
+            [
+              ['profilePhoto', 'Profile photo is required.'],
+              ['aadhaarFront', 'Aadhaar front image is required.'],
+              ['aadhaarBack', 'Aadhaar back image is required.'],
+            ].forEach(([id, message]) => {
+              const file = document.getElementById(id).files[0];
+              if (!file) {
+                errors.push(message);
+              } else if (!file.type.startsWith('image/')) {
+                errors.push(message.replace('is required', 'must be an image'));
+              }
+            });
+
+            return errors;
           }
 
           // Update the displayed admission fee to match the selected room type's real pricing.
@@ -363,11 +483,15 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
           // Form submission
           document.getElementById('admissionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const submitBtn = document.getElementById('submitBtn');
-            const overlay = document.getElementById('loadingOverlay');
+            clearMessage();
 
-            submitBtn.disabled = true;
-            overlay.style.display = 'flex';
+            const validationErrors = validateBeforeSubmit();
+            if (validationErrors.length > 0) {
+              showMessage('error', 'Please fix these details before submitting:\\n\\n' + validationErrors.map(error => '- ' + error).join('\\n'));
+              return;
+            }
+
+            setSubmitting(true, 'Preparing documents...');
 
             try {
               const profilePhotoFile = document.getElementById('profilePhoto').files[0];
@@ -401,6 +525,7 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
 
               let response;
               try {
+                setSubmitting(true, 'Submitting application...');
                 response = await fetch('/api/admissions/apply', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -408,33 +533,34 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
                 });
               } catch (networkErr) {
                 console.error(networkErr);
-                alert('Could not reach the server. Please check your internet connection and try again.');
-                submitBtn.disabled = false;
-                overlay.style.display = 'none';
+                showMessage('error', 'Could not reach the server. Please check the internet connection and try again.');
+                setSubmitting(false);
                 return;
               }
 
-              const result = await response.json();
+              const result = await parseResponse(response);
 
               if (response.ok) {
-                // Redirect applicant to payment page (Razorpay or simulated portal)
-                window.location.href = result.paymentLink;
+                showMessage('success', 'Application submitted successfully. Opening payment page...');
+                setSubmitting(true, 'Application saved. Opening payment page...');
+                setTimeout(() => {
+                  window.location.href = result.paymentLink;
+                }, 900);
               } else if (Array.isArray(result.details) && result.details.length > 0) {
-                // Validation errors: show exactly which field failed and why.
-                const fieldMessages = result.details.map(d => '- ' + d.message).join('\n');
-                alert('Please fix the following:\n' + fieldMessages);
-                submitBtn.disabled = false;
-                overlay.style.display = 'none';
+                const fieldMessages = result.details.map(d => '- ' + (d.field ? d.field + ': ' : '') + d.message).join('\\n');
+                showMessage('error', 'Please fix these details:\\n\\n' + fieldMessages);
+                setSubmitting(false);
+              } else if (response.status === 413) {
+                showMessage('error', 'The selected photos are still too large. Please choose smaller or clearer compressed images and submit again.');
+                setSubmitting(false);
               } else {
-                alert('Submission failed: ' + (result.error || 'Unexpected server error. Please try again.'));
-                submitBtn.disabled = false;
-                overlay.style.display = 'none';
+                showMessage('error', 'Submission failed. ' + (result.error || 'Please try again in a moment.'));
+                setSubmitting(false);
               }
             } catch (err) {
               console.error(err);
-              alert('An error occurred while preparing your submission. Please check your files and try again.');
-              submitBtn.disabled = false;
-              overlay.style.display = 'none';
+              showMessage('error', 'Could not prepare the selected images. Please use JPG or PNG photos and try again.');
+              setSubmitting(false);
             }
           });
         </script>
