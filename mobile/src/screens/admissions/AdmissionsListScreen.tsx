@@ -30,6 +30,7 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
       });
       return response.data;
     },
+    refetchOnMount: 'always',
   });
 
   const renderApplicationItem = ({ item }: { item: any }) => {

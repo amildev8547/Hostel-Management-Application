@@ -268,14 +268,38 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
         </div>
 
         <script>
-          // Utility: Convert File to Base64
-          function fileToBase64(file) {
+          // Utility: resize camera images before converting to base64 so mobile
+          // submissions do not exceed the server request limit.
+          function fileToCompressedBase64(file, maxSize = 1280, quality = 0.72) {
             return new Promise((resolve, reject) => {
               const reader = new FileReader();
               reader.readAsDataURL(file);
-              reader.onload = () => resolve(reader.result);
+              reader.onload = () => {
+                const image = new Image();
+                image.onload = () => {
+                  const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+                  const canvas = document.createElement('canvas');
+                  canvas.width = Math.max(1, Math.round(image.width * scale));
+                  canvas.height = Math.max(1, Math.round(image.height * scale));
+
+                  const context = canvas.getContext('2d');
+                  if (!context) {
+                    reject(new Error('Could not prepare image upload.'));
+                    return;
+                  }
+
+                  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                  resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                image.onerror = reject;
+                image.src = reader.result;
+              };
               reader.onerror = error => reject(error);
             });
+          }
+
+          function onlyDigits(value) {
+            return String(value || '').replace(/\\D/g, '').slice(-10);
           }
 
           // Update the displayed admission fee to match the selected room type's real pricing.
@@ -341,17 +365,17 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
               const aadhaarFrontFile = document.getElementById('aadhaarFront').files[0];
               const aadhaarBackFile = document.getElementById('aadhaarBack').files[0];
 
-              const profileBase64 = await fileToBase64(profilePhotoFile);
-              const aadhaarFrontBase64 = await fileToBase64(aadhaarFrontFile);
-              const aadhaarBackBase64 = await fileToBase64(aadhaarBackFile);
+              const profileBase64 = await fileToCompressedBase64(profilePhotoFile);
+              const aadhaarFrontBase64 = await fileToCompressedBase64(aadhaarFrontFile);
+              const aadhaarBackBase64 = await fileToCompressedBase64(aadhaarBackFile);
 
               const payload = {
                 name: document.getElementById('name').value,
-                phone: document.getElementById('phone').value,
-                whatsappNumber: document.getElementById('whatsappNumber').value,
+                phone: onlyDigits(document.getElementById('phone').value),
+                whatsappNumber: onlyDigits(document.getElementById('whatsappNumber').value),
                 address: document.getElementById('address').value,
                 guardianName: document.getElementById('guardianName').value,
-                guardianPhone: document.getElementById('guardianPhone').value,
+                guardianPhone: onlyDigits(document.getElementById('guardianPhone').value),
                 nearestPoliceStation: document.getElementById('nearestPoliceStation').value,
                 occupation: document.getElementById('occupation').value,
                 workLocation: document.getElementById('workLocation').value,

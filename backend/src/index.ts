@@ -23,9 +23,10 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-// Set JSON limit to 10MB to accommodate base64 photos/Aadhaar cards
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+// Admission forms send three base64 images; compression runs client-side, but keep
+// enough headroom for older phones and browser camera files.
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ limit: '25mb', extended: true }));
 
 // Serve local uploads folder statically
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
@@ -67,7 +68,8 @@ app.get('/health/db', async (req, res) => {
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Unhandled Server Error:', err);
-  res.status(500).json({ error: err.message || 'Internal Server Error' });
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ error: err.message || 'Internal Server Error' });
 });
 
 // Start Server

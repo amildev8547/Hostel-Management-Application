@@ -100,6 +100,7 @@ export const publicAdmissionFormSchema = z.object({
       aadhaarFront: z.string().min(10, 'Aadhaar front base64 is required'),
       aadhaarBack: z.string().min(10, 'Aadhaar back base64 is required'),
       notes: z.string().optional(),
+      branchId: z.string().min(1, 'Branch is required'),
       // Admission fee is computed server-side from room pricing; client value (if sent) is ignored.
       amount: z.number().optional(),
     })
