@@ -1,57 +1,14 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Surface, Card, List, Button, Switch, Divider, useTheme, Avatar, Portal, Dialog, TextInput } from 'react-native-paper';
+import { Text, Surface, Card, List, Switch, Divider, useTheme, Avatar } from 'react-native-paper';
 import { useAuth } from '../../services/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
-import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import { showAlert } from '../../utils/alerts';
 
 export default function SettingsScreen() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const theme = useTheme();
   const queryClient = useQueryClient();
-
-  // Change Password dialog state
-  const [passwordDialogVisible, setPasswordDialogVisible] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-
-  const closePasswordDialog = () => {
-    setPasswordDialogVisible(false);
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-  };
-
-  const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      showAlert('Please fill in all password fields.');
-      return;
-    }
-    if (newPassword.length < 6) {
-      showAlert('New password must be at least 6 characters.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      showAlert('New password and confirmation do not match.');
-      return;
-    }
-
-    setIsChangingPassword(true);
-    try {
-      await apiClient.post('/auth/change-password', { currentPassword, newPassword });
-      showAlert('Password changed successfully.');
-      closePasswordDialog();
-    } catch (err: any) {
-      console.error(err);
-      showAlert(err.response?.data?.error || 'Failed to change password');
-    } finally {
-      setIsChangingPassword(false);
-    }
-  };
 
   // Load Settings
   const { data: settings } = useQuery<Record<string, string>>({
@@ -106,21 +63,7 @@ export default function SettingsScreen() {
         </View>
       </Surface>
 
-      {/* 2. Account */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Account</Text>
-      <Card style={styles.settingsCard}>
-        <Card.Content style={{ padding: 0 }}>
-          <List.Item
-            title="Change Password"
-            description="Update your account login password"
-            left={(props) => <List.Icon {...props} icon="lock-reset" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => setPasswordDialogVisible(true)}
-          />
-        </Card.Content>
-      </Card>
-
-      {/* 3. Operations Prefs */}
+      {/* 2. Operations Prefs */}
       <Text variant="titleMedium" style={styles.sectionTitle}>System Preferences</Text>
       <Card style={styles.settingsCard}>
         <Card.Content style={{ padding: 0 }}>
@@ -160,7 +103,7 @@ export default function SettingsScreen() {
         </Card.Content>
       </Card>
 
-      {/* 4. App Details */}
+      {/* 3. App Details */}
       <Text variant="titleMedium" style={styles.sectionTitle}>About App</Text>
       <Card style={styles.settingsCard}>
         <Card.Content style={{ padding: 0 }}>
@@ -171,63 +114,14 @@ export default function SettingsScreen() {
           />
           <Divider />
           <List.Item
-            title="SaaS Mode"
-            description="Hostel Owner Administrative Dashboard"
+            title="Single Owner Mode"
+            description="Login is disabled for this installation"
             left={(props) => <List.Icon {...props} icon="cellphone-cog" />}
           />
         </Card.Content>
       </Card>
 
-      {/* 5. Logout trigger */}
-      <Button
-        mode="contained"
-        icon="logout"
-        style={styles.logoutBtn}
-        buttonColor={theme.colors.error}
-        onPress={logout}
-      >
-        Sign Out Account
-      </Button>
-
       <View style={{ height: 40 }} />
-
-      {/* Change Password Dialog */}
-      <Portal>
-        <Dialog visible={passwordDialogVisible} onDismiss={closePasswordDialog}>
-          <Dialog.Title>Change Password</Dialog.Title>
-          <Dialog.Content>
-            <TextInput
-              label="Current Password"
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              secureTextEntry
-              mode="outlined"
-              style={{ marginBottom: 12 }}
-            />
-            <TextInput
-              label="New Password"
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry
-              mode="outlined"
-              style={{ marginBottom: 12 }}
-            />
-            <TextInput
-              label="Confirm New Password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              mode="outlined"
-            />
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={closePasswordDialog} disabled={isChangingPassword}>Cancel</Button>
-            <Button onPress={handleChangePassword} loading={isChangingPassword} disabled={isChangingPassword}>
-              Save
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
     </ScrollView>
   );
 }
@@ -275,11 +169,5 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 20,
     overflow: 'hidden',
-  },
-  logoutBtn: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
   },
 });

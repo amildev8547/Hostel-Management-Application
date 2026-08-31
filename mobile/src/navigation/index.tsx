@@ -2,16 +2,13 @@ import React from 'react';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { useAuth } from '../services/AuthContext';
 import apiClient from '../services/api';
 
 // Screens
-import LoginScreen from '../screens/auth/LoginScreen';
-import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import DashboardScreen from '../screens/home/DashboardScreen';
 import BranchListScreen from '../screens/branches/BranchListScreen';
 import BranchDashboardScreen from '../screens/branches/BranchDashboardScreen';
@@ -30,7 +27,6 @@ import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 
 // Stack Navigation Type Definitions
 export type RootStackParamList = {
-  Auth: undefined;
   Main: undefined;
   BranchDashboard: { branchId: string; branchName: string };
   QRCode: { branchId: string; branchName: string };
@@ -58,18 +54,7 @@ export type TabParamList = {
 };
 
 const RootStack = createStackNavigator<RootStackParamList>();
-const AuthStack = createStackNavigator<AuthStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
-
-// Unauthenticated auth stack
-function AuthNavigator() {
-  return (
-    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
-      <AuthStack.Screen name="Login" component={LoginScreen} />
-      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-    </AuthStack.Navigator>
-  );
-}
 
 // Bell icon shown in every tab's header, badged with the live unread count, that
 // jumps to the Notifications screen (today's vacating tenants, rent due/overdue alerts).
@@ -136,36 +121,20 @@ function TabNavigator() {
 
 // Global App Navigation Container
 export default function AppNavigator() {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
-        <ActivityIndicator size="large" color="#4F46E5" />
-      </View>
-    );
-  }
-
   return (
     <NavigationContainer>
       <RootStack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#FFFFFF' }, headerTitleStyle: { fontWeight: '600' } }}>
-        {!isAuthenticated ? (
-          <RootStack.Screen name="Auth" component={AuthNavigator} options={{ headerShown: false }} />
-        ) : (
-          <>
-            <RootStack.Screen name="Main" component={TabNavigator} options={{ headerShown: false }} />
-            <RootStack.Screen name="BranchDashboard" component={BranchDashboardScreen} options={({ route }) => ({ title: route.params.branchName })} />
-            <RootStack.Screen name="QRCode" component={QRCodeScreen} options={{ title: 'Admission QR Code' }} />
-            <RootStack.Screen name="BranchForm" component={BranchFormScreen} options={{ title: 'Branch Details' }} />
-            <RootStack.Screen name="RoomDetails" component={RoomDetailsScreen} options={{ title: 'Room Details' }} />
-            <RootStack.Screen name="RoomForm" component={RoomFormScreen} options={{ title: 'Room Details' }} />
-            <RootStack.Screen name="TenantProfile" component={TenantProfileScreen} options={{ title: 'Tenant Profile' }} />
-            <RootStack.Screen name="MoveTenant" component={MoveTenantScreen} options={{ title: 'Reallocate Room' }} />
-            <RootStack.Screen name="AdmissionReview" component={AdmissionReviewScreen} options={{ title: 'Review Application' }} />
-            <RootStack.Screen name="PaymentsDashboard" component={PaymentsDashboardScreen} options={{ title: 'Payments Summary' }} />
-            <RootStack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
-          </>
-        )}
+        <RootStack.Screen name="Main" component={TabNavigator} options={{ headerShown: false }} />
+        <RootStack.Screen name="BranchDashboard" component={BranchDashboardScreen} options={({ route }) => ({ title: route.params.branchName })} />
+        <RootStack.Screen name="QRCode" component={QRCodeScreen} options={{ title: 'Admission QR Code' }} />
+        <RootStack.Screen name="BranchForm" component={BranchFormScreen} options={{ title: 'Branch Details' }} />
+        <RootStack.Screen name="RoomDetails" component={RoomDetailsScreen} options={{ title: 'Room Details' }} />
+        <RootStack.Screen name="RoomForm" component={RoomFormScreen} options={{ title: 'Room Details' }} />
+        <RootStack.Screen name="TenantProfile" component={TenantProfileScreen} options={{ title: 'Tenant Profile' }} />
+        <RootStack.Screen name="MoveTenant" component={MoveTenantScreen} options={{ title: 'Reallocate Room' }} />
+        <RootStack.Screen name="AdmissionReview" component={AdmissionReviewScreen} options={{ title: 'Review Application' }} />
+        <RootStack.Screen name="PaymentsDashboard" component={PaymentsDashboardScreen} options={{ title: 'Payments Summary' }} />
+        <RootStack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
       </RootStack.Navigator>
     </NavigationContainer>
   );

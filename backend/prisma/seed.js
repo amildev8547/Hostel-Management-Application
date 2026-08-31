@@ -18,7 +18,7 @@ async function main() {
     await prisma.setting.deleteMany({});
     await prisma.user.deleteMany({});
     console.log('Seeding owner account...');
-    const hashedPassword = await bcryptjs_1.default.hash('password123', 10);
+    const hashedPassword = await bcryptjs_1.default.hash('owner123', 10);
     const owner = await prisma.user.create({
         data: {
             email: 'owner@hostelhub.com',

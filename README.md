@@ -85,13 +85,16 @@ BACKEND_URL="http://localhost:5000"
 
 *Seeded Account Details:*
 - **Owner Account**: `owner@hostelhub.com`
-- **Password**: `password123`
+- **Password**: `owner123`
 
 ---
 
 ## API Documentation & Routes
 
-All API endpoints are prefixed with `/api`. Authenticated endpoints require header: `Authorization: Bearer <JWT_TOKEN>`.
+All API endpoints are prefixed with `/api`.
+
+> [!NOTE]
+> This installation is configured for **single-owner mode**. The mobile app opens directly to the dashboard, and protected backend routes automatically use the first owner account in the database. If no owner exists, the backend creates one with `owner@hostelhub.com`.
 
 ### 1. Authentication
 - `POST /auth/register` - Register a new owner account.

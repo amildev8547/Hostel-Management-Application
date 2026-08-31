@@ -144,7 +144,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               💡 Demo Owner Credentials:
             </Text>
             <Text variant="bodySmall" style={{ color: '#475569', marginTop: 2 }}>
-              Email: owner@hostelhub.com | Pass: password123
+              Email: owner@hostelhub.com | Pass: owner123
             </Text>
           </View>
         </Surface>
