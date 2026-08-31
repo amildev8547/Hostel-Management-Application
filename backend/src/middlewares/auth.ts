@@ -15,13 +15,23 @@ async function getSingleOwnerUser() {
   const email = (process.env.SINGLE_OWNER_EMAIL || 'owner@hostelhub.com').toLowerCase();
   const name = process.env.SINGLE_OWNER_NAME || 'Amil Dev';
 
+  const configuredOwner = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (configuredOwner) {
+    return configuredOwner;
+  }
+
   const existingOwner = await prisma.user.findFirst({
     where: { role: 'OWNER' },
-    orderBy: { createdAt: 'asc' },
   });
 
   if (existingOwner) {
-    return existingOwner;
+    return prisma.user.update({
+      where: { id: existingOwner.id },
+      data: { email, name },
+    });
   }
 
   const password = await bcrypt.hash(process.env.SINGLE_OWNER_PASSWORD || 'owner123', 10);
