@@ -3,12 +3,14 @@ import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 're
 import { TextInput, Button, Text, HelperText, useTheme, SegmentedButtons, Surface } from 'react-native-paper';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { branchFormSchema } from '../../validations/schemas';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation';
 import { showAlert, showConfirm } from '../../utils/alerts';
+import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type BranchFormRouteProp = RouteProp<RootStackParamList, 'BranchForm'>;
 type BranchFormNavigationProp = StackNavigationProp<RootStackParamList, 'BranchForm'>;
@@ -21,6 +23,7 @@ interface BranchFormScreenProps {
 export default function BranchFormScreen({ route, navigation }: BranchFormScreenProps) {
   const { branchId } = route.params;
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [statusVal, setStatusVal] = useState('ACTIVE');
@@ -30,9 +33,6 @@ export default function BranchFormScreen({ route, navigation }: BranchFormScreen
     defaultValues: {
       name: '',
       address: '',
-      phone: '',
-      googleMapsLocation: '',
-      rentDueDay: 5,
       status: 'ACTIVE',
     },
   });
@@ -46,9 +46,6 @@ export default function BranchFormScreen({ route, navigation }: BranchFormScreen
           const data = response.data;
           setValue('name', data.name);
           setValue('address', data.address);
-          setValue('phone', data.phone);
-          setValue('googleMapsLocation', data.googleMapsLocation || '');
-          setValue('rentDueDay', data.rentDueDay);
           setValue('status', data.status);
           setStatusVal(data.status);
         })
@@ -70,10 +67,12 @@ export default function BranchFormScreen({ route, navigation }: BranchFormScreen
       if (branchId) {
         // Edit Mode
         await apiClient.put(`/branches/${branchId}`, payload);
+        await invalidateHostelData(queryClient, { branchId });
         showAlert('Branch updated successfully', 'Success', () => navigation.goBack());
       } else {
         // Create Mode
         await apiClient.post('/branches', payload);
+        await invalidateHostelData(queryClient);
         showAlert('Branch created successfully', 'Success', () => navigation.goBack());
       }
     } catch (err: any) {
@@ -91,6 +90,7 @@ export default function BranchFormScreen({ route, navigation }: BranchFormScreen
         setIsSubmitting(true);
         try {
           await apiClient.delete(`/branches/${branchId}`);
+          await invalidateHostelData(queryClient, { branchId });
           showAlert('Branch deleted', 'Success', () => navigation.navigate('Main'));
         } catch (err: any) {
           console.error(err);
@@ -157,57 +157,6 @@ export default function BranchFormScreen({ route, navigation }: BranchFormScreen
             )}
           />
           {errors.address && <HelperText type="error">{errors.address.message}</HelperText>}
-
-          <Controller
-            control={control}
-            name="phone"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Phone Number *"
-                value={value}
-                onBlur={onBlur}
-                onChangeText={onChange}
-                mode="outlined"
-                keyboardType="phone-pad"
-                error={!!errors.phone}
-                style={styles.input}
-              />
-            )}
-          />
-          {errors.phone && <HelperText type="error">{errors.phone.message}</HelperText>}
-
-          <Controller
-            control={control}
-            name="googleMapsLocation"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Google Maps URL (Optional)"
-                value={value}
-                onBlur={onBlur}
-                onChangeText={onChange}
-                mode="outlined"
-                style={styles.input}
-              />
-            )}
-          />
-
-          <Controller
-            control={control}
-            name="rentDueDay"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Rent Due Day of Month (1-31) *"
-                value={String(value)}
-                onBlur={onBlur}
-                onChangeText={(text) => onChange(Number(text) || 5)}
-                mode="outlined"
-                keyboardType="numeric"
-                error={!!errors.rentDueDay}
-                style={styles.input}
-              />
-            )}
-          />
-          {errors.rentDueDay && <HelperText type="error">{errors.rentDueDay.message}</HelperText>}
 
           {/* Status Segment */}
           <Text variant="labelMedium" style={styles.statusLabel}>Branch Status</Text>

@@ -51,9 +51,9 @@ export const branchSchema = z.object({
   body: z.object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
     address: z.string().min(5, 'Address must be at least 5 characters'),
-    phone: z.string().min(10, 'Phone must be at least 10 digits'),
+    phone: z.string().optional(),
     googleMapsLocation: z.string().optional(),
-    rentDueDay: z.number().min(1).max(31).default(5),
+    rentDueDay: z.number().min(1).max(31).optional(),
     status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
   }),
 });

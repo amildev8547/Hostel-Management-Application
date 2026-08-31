@@ -9,6 +9,7 @@ import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert } from '../../utils/alerts';
 import { getBackendBaseUrl } from '../../utils/backendUrl';
+import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type PaymentsDashboardRouteProp = RouteProp<RootStackParamList, 'PaymentsDashboard'>;
 type PaymentsDashboardNavigationProp = StackNavigationProp<RootStackParamList, 'PaymentsDashboard'>;
@@ -130,8 +131,8 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
     setIsProcessing(true);
     try {
       const response = await apiClient.post('/payments/generate-dues');
+      await invalidateHostelData(queryClient, { branchId });
       showAlert(response.data.message || 'Rent dues generation complete.');
-      refetch();
     } catch (err: any) {
       console.error(err);
       showAlert(err.response?.data?.error || 'Failed to generate dues');
@@ -174,9 +175,12 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
     setIsProcessing(true);
     try {
       await apiClient.post(`/payments/${pay.id}/record-pay`, { paymentMethod });
+      await invalidateHostelData(queryClient, {
+        branchId: pay.branchId,
+        roomId: pay.tenant?.roomId,
+        tenantId: pay.tenantId,
+      });
       showAlert('Payment recorded successfully.');
-      refetch();
-      queryClient.invalidateQueries({ queryKey: ['allPaymentsSummary'] });
       await sendPaymentReceivedWhatsApp(pay, paymentMethod);
     } catch (err: any) {
       console.error(err);
@@ -221,8 +225,11 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
       showAlert('Amount updated successfully!');
       setEditModalVisible(false);
       setEditingPayment(null);
-      refetch();
-      queryClient.invalidateQueries({ queryKey: ['allPaymentsSummary'] });
+      await invalidateHostelData(queryClient, {
+        branchId: editingPayment.branchId,
+        roomId: editingPayment.tenant?.roomId,
+        tenantId: editingPayment.tenantId,
+      });
     } catch (err: any) {
       console.error(err);
       showAlert(err.response?.data?.error || 'Failed to update amount');

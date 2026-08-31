@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Surface, Button, useTheme, Card, List, RadioButton } from 'react-native-paper';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert } from '../../utils/alerts';
+import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type MoveTenantRouteProp = RouteProp<RootStackParamList, 'MoveTenant'>;
 type MoveTenantNavigationProp = StackNavigationProp<RootStackParamList, 'MoveTenant'>;
@@ -20,6 +21,7 @@ interface MoveTenantScreenProps {
 export default function MoveTenantScreen({ route, navigation }: MoveTenantScreenProps) {
   const { tenantId, branchId } = route.params;
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -57,6 +59,11 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
     setIsSubmitting(true);
     try {
       await apiClient.post(`/tenants/${tenantId}/move`, { newRoomId: selectedRoomId });
+      await invalidateHostelData(queryClient, {
+        branchId,
+        tenantId,
+        roomId: tenant?.roomId,
+      });
       showAlert('Tenant moved successfully', 'Success', () => navigation.pop(2)); // Go back to profile screen and refresh it
     } catch (err: any) {
       console.error(err);

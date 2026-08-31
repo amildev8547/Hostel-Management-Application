@@ -4,7 +4,7 @@ import prisma from '../config/db';
 import { calculateBranchMetrics } from '../utils/occupancy';
 
 export async function createBranch(req: AuthenticatedRequest, res: Response) {
-  const { name, address, phone, googleMapsLocation, rentDueDay, status } = req.body;
+  const { name, address, phone = '', googleMapsLocation, rentDueDay = 5, status } = req.body;
   const userId = req.user?.id;
 
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -59,9 +59,27 @@ export async function getBranches(req: AuthenticatedRequest, res: Response) {
       orderBy: { createdAt: 'desc' },
     });
 
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const branchIds = branches.map((branch) => branch.id);
+    const unpaidPayments = branchIds.length
+      ? await prisma.payment.findMany({
+          where: {
+            branchId: { in: branchIds },
+            status: { in: ['PENDING', 'OVERDUE'] },
+            createdAt: { gte: startOfMonth, lte: endOfMonth },
+          },
+        })
+      : [];
+
+    const pendingPaymentsByBranch = unpaidPayments.reduce<Record<string, number>>((totals, payment) => {
+      totals[payment.branchId] = (totals[payment.branchId] || 0) + payment.amount;
+      return totals;
+    }, {});
+
     // Compute basic statistics inline for lists
-    const branchList = await Promise.all(
-      branches.map(async (branch) => {
+    const branchList = branches.map((branch) => {
         let totalRooms = branch.rooms.length;
         let totalBeds = 0;
         let occupiedBeds = 0;
@@ -70,21 +88,6 @@ export async function getBranches(req: AuthenticatedRequest, res: Response) {
           totalBeds += room.capacity;
           occupiedBeds += room.tenants.length;
         });
-
-        // Compute unpaid payments for this month
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-        const unpaidPayments = await prisma.payment.findMany({
-          where: {
-            branchId: branch.id,
-            status: { in: ['PENDING', 'OVERDUE'] },
-            createdAt: { gte: startOfMonth, lte: endOfMonth },
-          },
-        });
-
-        const pendingPaymentAmount = unpaidPayments.reduce((sum, p) => sum + p.amount, 0);
 
         return {
           id: branch.id,
@@ -96,10 +99,9 @@ export async function getBranches(req: AuthenticatedRequest, res: Response) {
           totalBeds,
           vacantBeds: totalBeds - occupiedBeds,
           occupancyPercentage: totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0,
-          pendingPayments: pendingPaymentAmount,
+          pendingPayments: pendingPaymentsByBranch[branch.id] || 0,
         };
-      })
-    );
+      });
 
     res.json(branchList);
   } catch (error) {
@@ -132,7 +134,7 @@ export async function getBranchById(req: AuthenticatedRequest, res: Response) {
 
 export async function updateBranch(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const { name, address, phone, googleMapsLocation, rentDueDay, status } = req.body;
+  const { name, address, status } = req.body;
   const userId = req.user?.id;
 
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -149,9 +151,6 @@ export async function updateBranch(req: AuthenticatedRequest, res: Response) {
       data: {
         name,
         address,
-        phone,
-        googleMapsLocation,
-        rentDueDay,
         status,
       },
     });

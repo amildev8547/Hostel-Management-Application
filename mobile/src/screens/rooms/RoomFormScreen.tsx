@@ -3,12 +3,14 @@ import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 're
 import { TextInput, Button, Text, HelperText, useTheme, SegmentedButtons, Surface } from 'react-native-paper';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { roomFormSchema } from '../../validations/schemas';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation';
 import { showAlert } from '../../utils/alerts';
+import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type RoomFormRouteProp = RouteProp<RootStackParamList, 'RoomForm'>;
 type RoomFormNavigationProp = StackNavigationProp<RootStackParamList, 'RoomForm'>;
@@ -21,6 +23,7 @@ interface RoomFormScreenProps {
 export default function RoomFormScreen({ route, navigation }: RoomFormScreenProps) {
   const { branchId, roomId } = route.params;
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [statusVal, setStatusVal] = useState('AVAILABLE');
@@ -90,10 +93,12 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
       if (roomId) {
         // Edit Mode
         await apiClient.put(`/rooms/${roomId}`, payload);
+        await invalidateHostelData(queryClient, { branchId, roomId });
         showAlert('Room details updated successfully', 'Success', () => navigation.goBack());
       } else {
         // Create Mode
         await apiClient.post('/rooms', payload);
+        await invalidateHostelData(queryClient, { branchId });
         showAlert('Room created successfully', 'Success', () => navigation.goBack());
       }
     } catch (err: any) {

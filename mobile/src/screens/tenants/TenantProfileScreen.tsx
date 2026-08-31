@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Image, Modal, TouchableOpacity, Linking } from 'react-native';
 import { Text, Surface, Card, Button, useTheme, Divider, List, Portal, Dialog, TextInput, Chip, IconButton } from 'react-native-paper';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -9,6 +9,7 @@ import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { getBackendBaseUrl } from '../../utils/backendUrl';
+import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type TenantProfileRouteProp = RouteProp<RootStackParamList, 'TenantProfile'>;
 type TenantProfileNavigationProp = StackNavigationProp<RootStackParamList, 'TenantProfile'>;
@@ -21,6 +22,7 @@ interface TenantProfileScreenProps {
 export default function TenantProfileScreen({ route, navigation }: TenantProfileScreenProps) {
   const { tenantId } = route.params;
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeImageModal, setActiveImageModal] = useState<string | null>(null);
 
@@ -46,8 +48,12 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
         setIsProcessing(true);
         try {
           await apiClient.post(`/tenants/${tenantId}/vacate`);
+          await invalidateHostelData(queryClient, {
+            branchId: tenant?.room?.branchId,
+            roomId: tenant?.roomId,
+            tenantId,
+          });
           showAlert('Tenant marked as Vacated');
-          refetch();
         } catch (err: any) {
           console.error(err);
           showAlert(err.response?.data?.error || 'Failed to vacate tenant');
@@ -66,6 +72,11 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
         setIsProcessing(true);
         try {
           await apiClient.delete(`/tenants/${tenantId}`);
+          await invalidateHostelData(queryClient, {
+            branchId: tenant?.room?.branchId,
+            roomId: tenant?.roomId,
+            tenantId,
+          });
           showAlert('Tenant record deleted successfully');
           navigation.navigate('Main');
         } catch (err: any) {
@@ -120,7 +131,11 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
         });
       }
       setRentDialogVisible(false);
-      refetch();
+      await invalidateHostelData(queryClient, {
+        branchId: tenant?.room?.branchId,
+        roomId: tenant?.roomId,
+        tenantId,
+      });
     } catch (err: any) {
       console.error(err);
       showAlert(err.response?.data?.error || 'Failed to save rent invoice');

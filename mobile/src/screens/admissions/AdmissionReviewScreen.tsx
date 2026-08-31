@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Image, Modal, TouchableOpacity } from 'react-native';
 import { Text, Surface, Card, Button, useTheme, Divider, SegmentedButtons } from 'react-native-paper';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert, showConfirm } from '../../utils/alerts';
+import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type AdmissionReviewRouteProp = RouteProp<RootStackParamList, 'AdmissionReview'>;
 type AdmissionReviewNavigationProp = StackNavigationProp<RootStackParamList, 'AdmissionReview'>;
@@ -20,6 +21,7 @@ interface AdmissionReviewScreenProps {
 export default function AdmissionReviewScreen({ route, navigation }: AdmissionReviewScreenProps) {
   const { applicationId } = route.params;
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
   const [activeImageModal, setActiveImageModal] = useState<string | null>(null);
@@ -56,6 +58,11 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
         await apiClient.post(`/admissions/${applicationId}/review`, {
           status,
           roomId: status === 'APPROVED' ? selectedRoomId : undefined,
+        });
+        await invalidateHostelData(queryClient, {
+          branchId: application.branchId,
+          applicationId,
+          roomId: selectedRoomId,
         });
         showAlert(`Application successfully ${status.toLowerCase()}`, 'Success', () => navigation.goBack());
       } catch (err: any) {

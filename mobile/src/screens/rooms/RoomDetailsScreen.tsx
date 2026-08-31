@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { Text, Surface, Card, Button, useTheme, Avatar, List, Divider, IconButton } from 'react-native-paper';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -9,6 +9,7 @@ import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { occupancyColors, occupancyLabels } from '../../theme';
 import { showAlert, showConfirm } from '../../utils/alerts';
+import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type RoomDetailsRouteProp = RouteProp<RootStackParamList, 'RoomDetails'>;
 type RoomDetailsNavigationProp = StackNavigationProp<RootStackParamList, 'RoomDetails'>;
@@ -21,6 +22,7 @@ interface RoomDetailsScreenProps {
 export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScreenProps) {
   const { roomId } = route.params;
   const theme = useTheme();
+  const queryClient = useQueryClient();
 
   const { data: room, isLoading, refetch, isRefetching } = useQuery<any>({
     queryKey: ['roomDetails', roomId],
@@ -41,6 +43,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
       async () => {
         try {
           await apiClient.delete(`/rooms/${roomId}`);
+          await invalidateHostelData(queryClient, { branchId: room.branchId, roomId });
           showAlert('Room deleted successfully', 'Success', () => navigation.goBack());
         } catch (err: any) {
           console.error(err);
