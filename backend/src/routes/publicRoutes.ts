@@ -610,27 +610,12 @@ router.get('/pay/:paymentId', async (req: Request, res: Response) => {
     const receiverName = settingValue(settings, 'payment_receiver_name') || payment.branch.user.name || payment.branch.name;
     const ownerWhatsapp = onlyDigits(settingValue(settings, 'payment_whatsapp_number'));
     const payerName = payment.tenant?.name || payment.admissionApplication?.name || 'Applicant';
-    const payerPhone = payment.tenant?.whatsappNumber || payment.tenant?.phone || payment.admissionApplication?.whatsappNumber || payment.admissionApplication?.phone || '';
     const roomLabel = payment.tenant?.room?.roomNumber ? `Room ${payment.tenant.room.roomNumber}` : 'Admission Application';
     const paymentNote = `HostelHub ${payment.paymentType} ${payment.id}`;
     const upiUrl = upiId
       ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(receiverName)}&am=${encodeURIComponent(String(payment.amount))}&cu=INR&tn=${encodeURIComponent(paymentNote)}`
       : '';
-    const whatsappMessage = [
-      `Hello, I have submitted the payment screenshot.`,
-      ``,
-      `Name: ${payerName}`,
-      `Branch: ${payment.branch.name}`,
-      `For: ${payment.paymentType} - ${roomLabel}`,
-      `Amount: Rs ${payment.amount}`,
-      `Invoice ID: ${payment.id}`,
-      `Phone: ${payerPhone || 'N/A'}`,
-      ``,
-      `I will attach the UPI payment screenshot in this chat.`,
-    ].join('\n');
-    const whatsappUrl = ownerWhatsapp
-      ? `https://wa.me/91${ownerWhatsapp}?text=${encodeURIComponent(whatsappMessage)}`
-      : `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`;
+    const whatsappUrl = ownerWhatsapp ? `https://wa.me/91${ownerWhatsapp}` : 'https://wa.me/';
 
     res.send(`
       <!DOCTYPE html>
