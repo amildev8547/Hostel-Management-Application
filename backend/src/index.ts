@@ -16,6 +16,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import settingRoutes from './routes/settingRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import publicRoutes from './routes/publicRoutes';
+import prisma from './config/db';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -46,6 +47,21 @@ app.use('/api/dashboard', dashboardRoutes);
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'HostelHub API is running smoothly' });
+});
+
+app.get('/health/db', async (req, res) => {
+  try {
+    await prisma.$runCommandRaw({ ping: 1 });
+    res.json({ status: 'ok', message: 'Database connection is healthy' });
+  } catch (error: any) {
+    console.error('Database health check error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Database connection failed',
+      error: error.message,
+      code: error.code,
+    });
+  }
 });
 
 // Error handling middleware
