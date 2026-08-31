@@ -18,8 +18,8 @@ hostel-management-app/
 │   │   └── seed.ts             # Sandbox DB seeding script
 │   ├── src/
 │   │   ├── config/             # DB client configurations
-│   │   ├── controllers/        # Route logic handlers (Auth, Branch, Rent, etc.)
-│   │   ├── middlewares/        # JWT auth, Zod schemas body parsing validation
+  │   │   ├── controllers/        # Route logic handlers (Branch, Rent, etc.)
+  │   │   ├── middlewares/        # Single-owner resolver, Zod body/query validation
 │   │   ├── routes/             # Express route registers
 │   │   ├── services/           # Cloudinary SDK, Razorpay hooks integration
 │   │   ├── utils/              # Bed occupancy calculators
@@ -83,9 +83,7 @@ BACKEND_URL="http://localhost:5000"
    npm run prisma:seed
    ```
 
-*Seeded Account Details:*
-- **Owner Account**: `owner@hostelhub.com`
-- **Password**: `owner123`
+The seed script creates a single owner record for branch, room, tenant, and payment ownership.
 
 ---
 
@@ -96,12 +94,7 @@ All API endpoints are prefixed with `/api`.
 > [!NOTE]
 > This installation is configured for **single-owner mode**. The mobile app opens directly to the dashboard, and protected backend routes automatically use the first owner account in the database. If no owner exists, the backend creates one with `owner@hostelhub.com`.
 
-### 1. Authentication
-- `POST /auth/register` - Register a new owner account.
-- `POST /auth/login` - Login to owner account. Returns JWT token and details.
-- `POST /auth/forgot-password` - Simulates triggering password recovery link.
-
-### 2. Branches
+### 1. Branches
 - `GET /branches` - Get all branches (supports `?search=`).
 - `POST /branches` - Create branch.
 - `GET /branches/:id` - Get branch profile by ID.
@@ -109,20 +102,20 @@ All API endpoints are prefixed with `/api`.
 - `DELETE /branches/:id` - Delete branch.
 - `GET /branches/:id/dashboard` - Get detailed occupancy metrics of a branch.
 
-### 3. Rooms
+### 2. Rooms
 - `GET /rooms?branchId=<id>` - Get rooms belonging to a branch.
 - `POST /rooms` - Add room.
 - `GET /rooms/:id` - Get room details, occupancy list, and transaction history.
 - `PUT /rooms/:id` - Update room parameters.
 - `DELETE /rooms/:id` - Delete room (blocks if occupied).
 
-### 4. Admission Applications
+### 3. Admission Applications
 - `POST /admissions/apply` - **[PUBLIC]** Submit application with base64 Profile Photo, Aadhaar Front, and Aadhaar Back. Creates pending rent record and returns Razorpay payment link.
 - `GET /admissions` - View applications list (filters: `?status=PENDING|APPROVED|REJECTED`).
 - `GET /admissions/:id` - Retrieve applicant details and file links.
 - `POST /admissions/:id/review` - Review application. Body: `{ status: "APPROVED" | "REJECTED", roomId: "<id>" }`. Moves applicant to Tenant directory, releases beds, and updates occupancy.
 
-### 5. Tenant Management
+### 4. Tenant Management
 - `GET /tenants` - Get active tenants (filters: `?status=ACTIVE|VACATED`, `?search=`).
 - `GET /tenants/:id` - View resident personal profiles, documents, and historical invoices.
 - `PUT /tenants/:id` - Edit contact/guardian info.
@@ -130,13 +123,13 @@ All API endpoints are prefixed with `/api`.
 - `POST /tenants/:id/vacate` - Checks out tenant, releases bed space.
 - `DELETE /tenants/:id` - Delete profile.
 
-### 6. Billing & Payments
+### 5. Billing & Payments
 - `GET /payments` - Retrieve collections (filters: `?status=PAID|PENDING|OVERDUE`, `?branchId=`).
 - `POST /payments/generate-dues` - **[OWNER ACTION]** Automatically generates PENDING monthly rent records for all active tenants who do not already have an invoice for the current month.
 - `POST /payments/:id/link` - Creates a Razorpay checkout URL for an unpaid invoice.
 - `POST /payments/:id/reminder` - Generates a WhatsApp reminder template and redirects the owner to WhatsApp.
 - `POST /payments/webhook` - **[PUBLIC]** Receives Razorpay webhook payloads (`payment_link.paid`, `payment.captured`), marks records as paid, and releases notifications.
-- `GET /payments/simulate-webhook/:paymentId` - **[SANDBOX]** Triggers payment success webhook logic locally for sandbox validation.
+- `POST /payments/simulate-webhook/:paymentId` - **[SANDBOX]** Triggers payment success webhook logic locally for sandbox validation.
 
 ---
 
@@ -148,7 +141,7 @@ All API endpoints are prefixed with `/api`.
 4. You will be redirected to the **HostelHub Checkout Sandbox**.
 5. Click **Authorize Mock Payment**.
 6. The page will trigger the simulated webhook endpoint `/api/payments/simulate-webhook/:paymentId`, update the application status, notify the owner, and redirect you to the success landing page!
-7. Open the mobile app (or run API query), log in, and you will see the new application pending review with the admission fee marked as paid!
+7. Open the mobile app Admissions tab and you will see the new application pending review with the admission fee marked as paid.
 
 ---
 
@@ -163,7 +156,7 @@ All API endpoints are prefixed with `/api`.
 3. Use the **Expo Go** application on your Android or iOS device to scan the QR code and load the app, or press `a` to boot on an Android Emulator.
 
 > [!TIP]
-> **API Configuration Note**: The backend endpoint defaults to `http://10.0.2.2:5000/api` on the Android emulator and `http://localhost:5000/api` on iOS. If you are loading the application on a **physical device** (connected to local Wi-Fi), update the base URL in [mobile/src/services/api.ts](file:///c:/Users/AmilDev/Downloads/Hostel%20management%20app/mobile/src/services/api.ts) to match your host computer's local IP address (e.g. `http://192.168.1.X:5000/api`).
+> The mobile client currently points to the deployed Render backend in `mobile/src/services/api.ts`.
 
 ---
 

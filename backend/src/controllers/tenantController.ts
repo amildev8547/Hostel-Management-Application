@@ -14,7 +14,7 @@ export async function getTenants(req: AuthenticatedRequest, res: Response) {
       where: {
         room: {
           branch: { userId },
-          ...(branchId ? { id: branchId as string } : {}),
+          ...(branchId ? { branchId: branchId as string } : {}),
         },
         ...(status ? { status: status as string } : { status: 'ACTIVE' }), // Default to active
         ...(search

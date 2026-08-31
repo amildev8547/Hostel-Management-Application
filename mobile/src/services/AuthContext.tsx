@@ -9,10 +9,6 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -25,22 +21,10 @@ const singleOwnerUser: User = {
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const login = async () => {
-    return;
-  };
-
-  const logout = async () => {
-    return;
-  };
-
   return (
     <AuthContext.Provider
       value={{
         user: singleOwnerUser,
-        isAuthenticated: true,
-        isLoading: false,
-        login,
-        logout,
       }}
     >
       {children}

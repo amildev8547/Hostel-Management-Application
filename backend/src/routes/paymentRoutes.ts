@@ -20,7 +20,6 @@ const router = Router();
 router.get('/callback', handleCallback);
 router.post('/webhook', handleWebhook);
 router.post('/simulate-webhook/:paymentId', simulateWebhook);
-router.get('/simulate-webhook/:paymentId', simulateWebhook); // Allow GET for quick browser testing!
 
 // Authenticated owner endpoints
 router.get('/', authenticateJWT, getPayments);

@@ -3,6 +3,15 @@ import prisma from '../config/db';
 
 const router = Router();
 
+function escapeHtml(value: string | number | null | undefined) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // 1. GET /apply/:branchId - Renders the public admission form
 router.get('/apply/:branchId', async (req: Request, res: Response) => {
   const { branchId } = req.params;
@@ -39,7 +48,7 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Hostel Admission Form - ${branch.name}</title>
+        <title>Hostel Admission Form - ${escapeHtml(branch.name)}</title>
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
         <style>
           :root {
@@ -154,7 +163,7 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
         <div class="container">
           <div class="header">
             <h1>Hostel Admission Form</h1>
-            <p>${branch.name} - Branch Application</p>
+            <p>${escapeHtml(branch.name)} - Branch Application</p>
           </div>
           <form id="admissionForm">
             <h2 class="section-title">Personal Details</h2>
@@ -259,7 +268,7 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
 
             <div class="form-group" style="background-color: #F9FAFB; padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
               <p style="font-size: 0.85rem; color: var(--text-muted); text-align: center;">
-                Admission Fee to Pay: <strong style="color: var(--primary); font-size: 1.1rem;" id="feeDisplay">₹${cheapestOverall}</strong>
+                Admission Fee to Pay: <strong style="color: var(--primary); font-size: 1.1rem;" id="feeDisplay">₹${escapeHtml(cheapestOverall)}</strong>
               </p>
             </div>
 
@@ -304,8 +313,8 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
 
           // Update the displayed admission fee to match the selected room type's real pricing.
           // This is for display only — the backend always recomputes the authoritative amount itself.
-          const roomFeeMap = ${JSON.stringify(roomFeeMap)};
-          const cheapestOverallFee = ${cheapestOverall};
+          const roomFeeMap = ${JSON.stringify(roomFeeMap).replace(/</g, '\\u003c')};
+          const cheapestOverallFee = ${JSON.stringify(cheapestOverall)};
           const feeDisplay = document.getElementById('feeDisplay');
           const preferredRoomTypeInput = document.getElementById('preferredRoomType');
 
@@ -386,7 +395,7 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
                 aadhaarFront: aadhaarFrontBase64,
                 aadhaarBack: aadhaarBackBase64,
                 notes: document.getElementById('notes').value || undefined,
-                branchId: "${branchId}",
+                branchId: ${JSON.stringify(branchId)},
                 amount: roomFeeMap[preferredRoomTypeInput.value] ?? cheapestOverallFee // Display only; server recomputes the real fee
               };
 

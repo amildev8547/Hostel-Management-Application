@@ -40,11 +40,6 @@ export type RootStackParamList = {
   Notifications: undefined;
 };
 
-export type AuthStackParamList = {
-  Login: undefined;
-  ForgotPassword: undefined;
-};
-
 export type TabParamList = {
   Home: undefined;
   Branches: undefined;

@@ -6,7 +6,6 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-import authRoutes from './routes/authRoutes';
 import branchRoutes from './routes/branchRoutes';
 import roomRoutes from './routes/roomRoutes';
 import admissionRoutes from './routes/admissionRoutes';
@@ -35,7 +34,6 @@ app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 app.use('/', publicRoutes);
 
 // Mount API routes
-app.use('/api/auth', authRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/admissions', admissionRoutes);
@@ -56,12 +54,7 @@ app.get('/health/db', async (req, res) => {
     res.json({ status: 'ok', message: 'Database connection is healthy' });
   } catch (error: any) {
     console.error('Database health check error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Database connection failed',
-      error: error.message,
-      code: error.code,
-    });
+    res.status(500).json({ status: 'error', message: 'Database connection failed' });
   }
 });
 
