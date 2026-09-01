@@ -13,7 +13,31 @@ if (!SUPABASE_ANON_KEY) {
   console.warn('Missing EXPO_PUBLIC_SUPABASE_ANON_KEY. Add it before running the app.');
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+async function safeJsonFetch(input: RequestInfo | URL, init?: RequestInit) {
+  const response = await fetch(input, init);
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return response;
+  }
+
+  const text = await response.text();
+  return new Response(
+    JSON.stringify({
+      message: text || `Supabase request failed with HTTP ${response.status}`,
+    }),
+    {
+      status: response.status,
+      statusText: response.statusText,
+      headers: { 'content-type': 'application/json' },
+    }
+  );
+}
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  global: {
+    fetch: safeJsonFetch,
+  },
+});
 
 type ApiResponse<T = any> = { data: T };
 type RequestConfig = { params?: Record<string, any> };
