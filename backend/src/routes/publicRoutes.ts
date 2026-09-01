@@ -472,17 +472,21 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
           });
 
           // File Label updates
-          const fileInputs = ['profilePhoto', 'aadhaarFront', 'aadhaarBack'];
-          fileInputs.forEach(id => {
-            const el = document.getElementById(id);
-            const wrapper = document.getElementById(id + 'Wrapper');
-            const label = document.getElementById(id + 'Label');
+          const fileInputs = [
+            { inputId: 'profilePhoto', wrapperId: 'profileWrapper', labelId: 'profileLabel', emptyLabel: 'Choose Profile Image' },
+            { inputId: 'aadhaarFront', wrapperId: 'aadhaarFrontWrapper', labelId: 'aadhaarFrontLabel', emptyLabel: 'Aadhaar Front Image' },
+            { inputId: 'aadhaarBack', wrapperId: 'aadhaarBackWrapper', labelId: 'aadhaarBackLabel', emptyLabel: 'Aadhaar Back Image' },
+          ];
+          fileInputs.forEach(({ inputId, wrapperId, labelId, emptyLabel }) => {
+            const el = document.getElementById(inputId);
+            const wrapper = document.getElementById(wrapperId);
+            const label = document.getElementById(labelId);
             el.addEventListener('change', (e) => {
               if (el.files && el.files[0]) {
                 label.innerText = el.files[0].name;
                 wrapper.classList.add('selected');
               } else {
-                label.innerText = 'Choose File';
+                label.innerText = emptyLabel;
                 wrapper.classList.remove('selected');
               }
             });
