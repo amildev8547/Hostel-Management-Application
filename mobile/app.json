@@ -25,7 +25,9 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "./plugins/withWhatsAppQueries"
+      "./plugins/withWhatsAppQueries",
+      "expo-secure-store",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {

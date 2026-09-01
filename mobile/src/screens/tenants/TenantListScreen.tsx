@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { Searchbar, Card, Text, Avatar, useTheme, SegmentedButtons } from 'react-native-paper';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 
@@ -31,6 +32,12 @@ export default function TenantListScreen({ navigation }: TenantListScreenProps) 
       return response.data;
     },
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch])
+  );
 
   const renderTenantItem = ({ item }: { item: any }) => {
     return (

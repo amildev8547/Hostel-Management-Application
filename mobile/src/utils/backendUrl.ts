@@ -1,16 +1,19 @@
-/**
- * Live backend deployed on Render. Used everywhere, including Expo Go/dev
- * builds, so URLs shared to WhatsApp / SMS are always real, live links.
- */
-const BACKEND_URL = 'https://hostel-management-application-9xxh.onrender.com';
+declare const process: {
+  env?: Record<string, string | undefined>;
+};
+
+const SUPABASE_URL = process.env?.EXPO_PUBLIC_SUPABASE_URL || 'https://mraiwlzhvsvwesbzwqgo.supabase.co';
+const PUBLIC_FORM_BASE_URL =
+  process.env?.EXPO_PUBLIC_PUBLIC_FORM_BASE_URL ||
+  `${SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co')}/hostel-public`;
 
 export function getBackendBaseUrl(): string {
-  return BACKEND_URL;
+  return PUBLIC_FORM_BASE_URL.replace(/\/$/, '');
 }
 
 /**
  * Returns the full public admission form URL for a given branch.
  */
 export function getApplyUrl(branchId: string): string {
-  return `${getBackendBaseUrl()}/apply/${branchId}`;
+  return `${getBackendBaseUrl()}/apply/${encodeURIComponent(branchId)}`;
 }

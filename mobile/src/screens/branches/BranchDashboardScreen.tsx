@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Share, Clipboard, FlatList } from 'react-native';
 import { Text, Surface, Card, Button, useTheme, SegmentedButtons, List, Divider } from 'react-native-paper';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -41,6 +42,13 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
       return response.data;
     },
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      void refetchDashboard();
+      void refetchRooms();
+    }, [refetchDashboard, refetchRooms])
+  );
 
   const metrics = dashboardData?.metrics || {
     totalRooms: 0,

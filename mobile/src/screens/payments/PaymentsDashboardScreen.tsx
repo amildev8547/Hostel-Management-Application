@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Linking, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Text, Surface, Card, Button, useTheme, SegmentedButtons, Divider, IconButton, ActivityIndicator, Portal, Modal } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -102,6 +103,12 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
       return response.data;
     },
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch])
+  );
 
   // Calculate high level summaries from list, scoped to the selected month
   const { data: allPayments } = useQuery<any[]>({

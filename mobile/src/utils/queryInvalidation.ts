@@ -11,8 +11,9 @@ export function invalidateHostelData(
   queryClient: QueryClient,
   scope: HostelInvalidationScope = {}
 ) {
+  const tasks: Promise<void>[] = [];
   const invalidate = (queryKey: unknown[]) => {
-    void queryClient.invalidateQueries({ queryKey });
+    tasks.push(queryClient.invalidateQueries({ queryKey, refetchType: 'all' }));
   };
 
   invalidate(['dashboardMetrics']);
@@ -42,4 +43,6 @@ export function invalidateHostelData(
   if (scope.applicationId) {
     invalidate(['admissionDetails', scope.applicationId]);
   }
+
+  return Promise.all(tasks);
 }
