@@ -8,7 +8,6 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert, showConfirm } from '../../utils/alerts';
-import { getBackendBaseUrl } from '../../utils/backendUrl';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type TenantProfileRouteProp = RouteProp<RootStackParamList, 'TenantProfile'>;
@@ -168,7 +167,10 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
     try {
       const linkResponse = await apiClient.post(`/payments/${pay.id}/link`);
       const upiPaymentUrl = linkResponse.data.upiPaymentUrl || '';
-      const manualPaymentUrl = linkResponse.data.manualPaymentUrl || `${getBackendBaseUrl()}/pay/${pay.id}`;
+      if (!upiPaymentUrl) {
+        showAlert('Please add your UPI ID in Settings before sharing a payment message.');
+        return;
+      }
 
       const phone = tenant.whatsappNumber || tenant.phone || '';
       const branchName = tenant.room?.branch?.name || '';
@@ -182,16 +184,13 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
         `💰 *Amount: ₹${pay.amount}*`,
         `📅 Due Date: ${new Date(pay.dueDate).toLocaleDateString('en-IN')}`,
         ``,
-        upiPaymentUrl ? `Tap this UPI link to pay:` : `Please pay through UPI using this page:`,
-        upiPaymentUrl || manualPaymentUrl,
+        `Tap this UPI link to pay:`,
+        upiPaymentUrl,
         ``,
-        upiPaymentUrl ? `If the UPI link does not open, use this page:` : '',
-        upiPaymentUrl ? manualPaymentUrl : '',
-        upiPaymentUrl ? `` : '',
         `After payment, send the UPI screenshot in this WhatsApp chat.`,
         ``,
         `— HostelHub`,
-      ].filter((line) => line !== '').join('\n');
+      ].join('\n');
 
       const whatsappUrl = phone
         ? `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`

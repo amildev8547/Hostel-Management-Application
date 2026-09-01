@@ -8,7 +8,6 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert } from '../../utils/alerts';
-import { getBackendBaseUrl } from '../../utils/backendUrl';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type PaymentsDashboardRouteProp = RouteProp<RootStackParamList, 'PaymentsDashboard'>;
@@ -244,7 +243,10 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
     try {
       const linkResponse = await apiClient.post(`/payments/${payment.id}/link`);
       const upiPaymentUrl = linkResponse.data.upiPaymentUrl || '';
-      const manualPaymentUrl = linkResponse.data.manualPaymentUrl || `${getBackendBaseUrl()}/pay/${payment.id}`;
+      if (!upiPaymentUrl) {
+        showAlert('Please add your UPI ID in Settings before sharing a payment message.');
+        return;
+      }
 
       const tenantName = payment.tenant?.name || 'Tenant';
       const phone = payment.tenant?.whatsappNumber || payment.tenant?.phone || '';
@@ -261,16 +263,13 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
         `💰 *Amount: ₹${payment.amount}*`,
         `📅 Due Date: ${new Date(payment.dueDate).toLocaleDateString('en-IN')}`,
         ``,
-        upiPaymentUrl ? `Tap this UPI link to pay:` : `Please pay through UPI using this page:`,
-        upiPaymentUrl || manualPaymentUrl,
+        `Tap this UPI link to pay:`,
+        upiPaymentUrl,
         ``,
-        upiPaymentUrl ? `If the UPI link does not open, use this page:` : '',
-        upiPaymentUrl ? manualPaymentUrl : '',
-        upiPaymentUrl ? `` : '',
         `After payment, send the UPI screenshot in this WhatsApp chat.`,
         ``,
         `— HostelHub`,
-      ].filter((line) => line !== '').join('\n');
+      ].join('\n');
 
       const whatsappUrl = phone
         ? `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`
