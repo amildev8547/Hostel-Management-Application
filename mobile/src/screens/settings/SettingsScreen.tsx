@@ -177,7 +177,7 @@ export default function SettingsScreen() {
         <Card.Content style={{ padding: 0 }}>
           <List.Item
             title="Version"
-            description="HostelHub V1.0.0 (MongoDB & Cloudinary)"
+            description="HostelHub V1.0.0 (Supabase)"
             left={(props) => <List.Icon {...props} icon="information-outline" />}
           />
           <Divider />
