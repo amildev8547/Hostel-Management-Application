@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Button, Card, Text, TextInput, useTheme } from 'react-native-paper';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import apiClient from '../../services/api';
 import { showAlert } from '../../utils/alerts';
@@ -43,9 +43,9 @@ export default function BookingFormScreen({ route, navigation }: Props) {
     } finally { setSaving(false); }
   };
 
-  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+  const handleDateChange = (_event: unknown, selectedDate: Date) => {
     if (Platform.OS === 'android') setShowCalendar(false);
-    if (event.type !== 'dismissed' && selectedDate) setJoiningDate(selectedDate);
+    setJoiningDate(selectedDate);
   };
 
   return <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -63,7 +63,7 @@ export default function BookingFormScreen({ route, navigation }: Props) {
         <View style={{ flex: 1 }}><Text style={styles.dateLabel}>Expected joining date</Text><Text style={styles.dateValue}>{joiningDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</Text></View>
         <Icon name="chevron-down" size={24} color="#64748B" />
       </TouchableOpacity>
-      {showCalendar && <DateTimePicker value={joiningDate} mode="date" display={Platform.OS === 'ios' ? 'inline' : 'calendar'} minimumDate={new Date()} onChange={handleDateChange} />}
+      {showCalendar && <DateTimePicker value={joiningDate} mode="date" display={Platform.OS === 'ios' ? 'inline' : 'calendar'} minimumDate={new Date()} onValueChange={handleDateChange} onDismiss={() => setShowCalendar(false)} />}
       <TextInput mode="outlined" label="Notes (optional)" value={notes} onChangeText={setNotes} multiline numberOfLines={3} style={styles.input} />
       <Button mode="contained" icon="bed" onPress={save} loading={saving} disabled={saving} style={styles.save}>Reserve this bed</Button>
     </Card.Content></Card>

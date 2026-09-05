@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { branchFormSchema } from '../../validations/schemas';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { invalidateHostelData } from '../../utils/queryInvalidation';

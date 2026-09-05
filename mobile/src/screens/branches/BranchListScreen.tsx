@@ -3,7 +3,7 @@ import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 're
 import { Searchbar, Card, Text, FAB, useTheme, Surface } from 'react-native-paper';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/api';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 

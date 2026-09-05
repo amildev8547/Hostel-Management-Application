@@ -10,7 +10,7 @@ import {
 import { Text, Button, Surface, useTheme, IconButton } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import { showAlert } from '../../utils/alerts';
 import { getApplyUrl } from '../../utils/backendUrl';

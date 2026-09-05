@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
@@ -52,7 +52,7 @@ export type TabParamList = {
   Settings: undefined;
 };
 
-const RootStack = createStackNavigator<RootStackParamList>();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
 
 // Bell icon shown in every tab's header, badged with the live unread count, that

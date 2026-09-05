@@ -4,7 +4,7 @@ import { Text, Surface, Card, Button, useTheme, Avatar, List, Divider, IconButto
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { occupancyColors, occupancyLabels } from '../../theme';

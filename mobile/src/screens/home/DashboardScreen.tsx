@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { Text, Surface, useTheme } from 'react-native-paper';
 import { useQuery } from '@tanstack/react-query';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import apiClient from '../../services/api';
 import { RootStackParamList } from '../../navigation';

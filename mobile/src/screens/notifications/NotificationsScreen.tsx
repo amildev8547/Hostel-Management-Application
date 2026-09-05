@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from '
 import { Text, Surface, Button, useTheme, ActivityIndicator } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 

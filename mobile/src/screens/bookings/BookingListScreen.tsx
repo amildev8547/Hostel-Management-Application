@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, FlatList, RefreshControl, Share } from 'react-native';
 import { Button, Card, FAB, Text, useTheme } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import apiClient from '../../services/api';
 import { getBackendBaseUrl } from '../../utils/backendUrl';
