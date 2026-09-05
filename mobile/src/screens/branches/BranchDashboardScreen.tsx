@@ -280,35 +280,28 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
               >
                 Rent Payments
               </Button>
+              <Button mode="outlined" icon="pencil" onPress={() => navigation.navigate('BranchForm', { branchId })} style={styles.actionBtn} contentStyle={{ paddingVertical: 4 }}>
+                Edit Branch
+              </Button>
             </View>
-
-            {/* 5. Branch Settings */}
-            <Button
-              mode="contained-tonal"
-              icon="pencil"
-              onPress={() => navigation.navigate('BranchForm', { branchId })}
-              style={{ marginTop: 8 }}
-            >
-              Edit Branch Information
-            </Button>
           </>
         ) : (
           /* Rooms List Segment */
           <View>
             <View style={styles.resultsHeader}>
-              <View style={{ flex: 1 }}>
+              <View style={styles.resultsTitleWrap}>
                 <Text variant="titleLarge" style={styles.resultsTitle}>{roomFilterLabels[roomFilter]}</Text>
                 <Text style={styles.resultsCount}>{filteredRooms.length} {filteredRooms.length === 1 ? 'room' : 'rooms'} found</Text>
               </View>
-              {metrics.reservedBeds > 0 && (
-                <TouchableOpacity style={styles.reservedNotice} onPress={() => navigation.navigate('BookingList')} accessibilityRole="button">
-                  <Icon name="bed" size={21} color="#7C3AED" />
-                  <Text style={styles.reservedNoticeText}>{metrics.reservedBeds} {metrics.reservedBeds === 1 ? 'bed is' : 'beds are'} reserved · View bookings</Text>
-                  <Icon name="chevron-right" size={21} color="#7C3AED" />
-                </TouchableOpacity>
-              )}
               {roomFilter !== 'all' && <Button mode="text" onPress={() => setRoomFilter('all')}>Show all</Button>}
             </View>
+            {metrics.reservedBeds > 0 && (
+              <TouchableOpacity style={styles.reservedNotice} onPress={() => navigation.navigate('BookingList')} accessibilityRole="button">
+                <Icon name="bed" size={21} color="#7C3AED" />
+                <Text style={styles.reservedNoticeText}>{metrics.reservedBeds} {metrics.reservedBeds === 1 ? 'bed is' : 'beds are'} reserved · View bookings</Text>
+                <Icon name="chevron-right" size={21} color="#7C3AED" />
+              </TouchableOpacity>
+            )}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
               {(['all', 'AVAILABLE', 'PARTIAL', 'FULL'] as RoomFilter[]).map((filter) => (
                 <Button key={filter} mode={roomFilter === filter ? 'contained' : 'outlined'} compact={false} onPress={() => setRoomFilter(filter)} style={styles.filterButton}>
@@ -340,14 +333,8 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
                         </View>
                       </View>
 
-                      <View style={styles.roomRight}>
-                        <Text variant="titleMedium" style={{ fontWeight: '700', color: theme.colors.primary }}>
-                          ₹{room.monthlyRent}
-                        </Text>
-                        <Text variant="bodySmall" style={{ color: '#64748B' }}>
-                          🛏️ {room.occupied} in use · {room.reserved || 0} reserved · {room.vacant} free
-                        </Text>
-                      </View>
+                      <View style={styles.roomRight}><Text variant="titleMedium" style={{ fontWeight: '700', color: theme.colors.primary }}>₹{room.monthlyRent}</Text><Icon name="chevron-right" size={23} color="#94A3B8" /></View>
+                      <Text variant="bodySmall" style={styles.bedSummary}>{room.occupied} in use · {room.reserved || 0} reserved · {room.vacant} free</Text>
                     </Card.Content>
                   </Card>
                 );
@@ -432,9 +419,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   tapLabel: { color: '#4F46E5', fontSize: 11, fontWeight: '700', marginTop: 5 },
-  reservedNotice: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F3E8FF', padding: 12, borderRadius: 12, marginTop: 12 },
+  reservedNotice: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F3E8FF', padding: 12, borderRadius: 12, marginBottom: 12 },
   reservedNoticeText: { flex: 1, color: '#6B21A8', fontSize: 13, fontWeight: '800' },
-  resultsHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  resultsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 },
+  resultsTitleWrap: { flex: 1, minWidth: 0 },
   resultsTitle: { color: '#0F172A', fontWeight: '800' },
   resultsCount: { color: '#64748B', fontSize: 14, marginTop: 3 },
   filterRow: { gap: 8, paddingBottom: 16 },
@@ -462,11 +450,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   actionBtn: {
     flex: 1,
-    borderRadius: 8,
+    minHeight: 54,
+    justifyContent: 'center',
+    borderRadius: 10,
     backgroundColor: '#FFFFFF',
   },
   center: {
@@ -481,7 +471,7 @@ const styles = StyleSheet.create({
   },
   roomCardContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     alignItems: 'center',
     paddingVertical: 8,
   },
@@ -501,8 +491,11 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   roomRight: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
+  bedSummary: { color: '#64748B', width: '100%', paddingLeft: 24, marginTop: 8, lineHeight: 18 },
   emptyRooms: {
     alignItems: 'center',
     paddingVertical: 40,

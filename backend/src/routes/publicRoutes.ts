@@ -130,11 +130,15 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
           .file-input-wrapper {
             background: #F3F4F6;
             border: 2px dashed var(--border);
-            padding: 1rem;
+            min-height: 54px;
+            padding: 0.9rem 1rem;
             border-radius: 8px;
             text-align: center;
             cursor: pointer;
             position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
           .file-input-wrapper input[type="file"] {
             position: absolute;
@@ -142,12 +146,18 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
             opacity: 0; cursor: pointer;
           }
           .file-input-wrapper .file-label {
+            display: block;
+            width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
             font-size: 0.85rem; color: var(--text-muted);
           }
           .file-input-wrapper.selected {
             background: #EEF2FF;
             border-color: var(--primary);
           }
+          .file-input-wrapper.selected .file-label { color: #3730A3; font-weight: 600; }
           .message-panel {
             display: none;
             padding: 1rem;
@@ -195,6 +205,10 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
           .btn-submit:disabled { background-color: var(--text-muted); cursor: not-allowed; }
           @media (max-width: 600px) {
             .form-row { grid-template-columns: 1fr; }
+            body { padding: 0; }
+            .container { border: 0; border-radius: 0; box-shadow: none; }
+            .header { padding: 1.75rem 1.25rem; }
+            form { padding: 1.25rem; gap: 1.25rem; }
           }
           .loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -481,17 +495,23 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
           });
 
           // File Label updates
-          const fileInputs = ['profilePhoto', 'aadhaarFront', 'aadhaarBack'];
-          fileInputs.forEach(id => {
+          const fileInputs = [
+            { id: 'profilePhoto', wrapperId: 'profileWrapper', emptyText: 'Choose Profile Image' },
+            { id: 'aadhaarFront', wrapperId: 'aadhaarFrontWrapper', emptyText: 'Aadhaar Front Image' },
+            { id: 'aadhaarBack', wrapperId: 'aadhaarBackWrapper', emptyText: 'Aadhaar Back Image' },
+          ];
+          fileInputs.forEach(({ id, wrapperId, emptyText }) => {
             const el = document.getElementById(id);
-            const wrapper = document.getElementById(id + 'Wrapper');
+            const wrapper = document.getElementById(wrapperId);
             const label = document.getElementById(id + 'Label');
-            el.addEventListener('change', (e) => {
+            el.addEventListener('change', () => {
               if (el.files && el.files[0]) {
-                label.innerText = el.files[0].name;
+                label.textContent = 'Selected: ' + el.files[0].name;
+                label.title = el.files[0].name;
                 wrapper.classList.add('selected');
               } else {
-                label.innerText = 'Choose File';
+                label.textContent = emptyText;
+                label.removeAttribute('title');
                 wrapper.classList.remove('selected');
               }
             });

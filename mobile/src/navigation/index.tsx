@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { NavigationContainer, NavigatorScreenParams, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
@@ -29,7 +29,7 @@ import BookingFormScreen from '../screens/bookings/BookingFormScreen';
 
 // Stack Navigation Type Definitions
 export type RootStackParamList = {
-  Main: undefined;
+  Main: NavigatorScreenParams<TabParamList> | undefined;
   BranchDashboard: { branchId: string; branchName: string };
   QRCode: { branchId: string; branchName: string };
   BranchForm: { branchId?: string };

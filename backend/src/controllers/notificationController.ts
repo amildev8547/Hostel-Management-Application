@@ -2,6 +2,29 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
 
+const DISMISSED_ALERTS_KEY = 'dismissed_notification_alert_ids';
+
+async function getDismissedAlertIds(userId: string): Promise<string[]> {
+  const setting = await prisma.setting.findFirst({ where: { userId, key: DISMISSED_ALERTS_KEY } });
+  if (!setting) return [];
+  try {
+    const value = JSON.parse(setting.value);
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveDismissedAlertIds(userId: string, ids: string[]) {
+  const value = JSON.stringify([...new Set(ids)].slice(-200));
+  const existing = await prisma.setting.findFirst({ where: { userId, key: DISMISSED_ALERTS_KEY } });
+  if (existing) {
+    await prisma.setting.update({ where: { id: existing.id }, data: { value } });
+  } else {
+    await prisma.setting.create({ data: { userId, key: DISMISSED_ALERTS_KEY, value } });
+  }
+}
+
 // Computes live, point-in-time alerts (today's vacating tenants, rent due today, rent overdue).
 // These are not persisted Notification rows — they reflect current data state, so they
 // automatically disappear once the underlying condition is resolved (vacated / paid).
@@ -94,7 +117,7 @@ export async function getNotifications(req: AuthenticatedRequest, res: Response)
       return res.json({ notifications: [], unreadCount: 0, alertsEnabled: false });
     }
 
-    const [notifications, unreadCount, liveAlerts] = await Promise.all([
+    const [notifications, unreadCount, liveAlerts, dismissedAlertIds] = await Promise.all([
       prisma.notification.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
@@ -104,11 +127,14 @@ export async function getNotifications(req: AuthenticatedRequest, res: Response)
         where: { userId, isRead: false },
       }),
       getLiveAlerts(userId),
+      getDismissedAlertIds(userId),
     ]);
 
+    const visibleLiveAlerts = liveAlerts.filter((alert) => !dismissedAlertIds.includes(alert.id));
+
     res.json({
-      notifications: [...liveAlerts, ...notifications],
-      unreadCount: unreadCount + liveAlerts.length,
+      notifications: [...visibleLiveAlerts, ...notifications],
+      unreadCount: unreadCount + visibleLiveAlerts.length,
       alertsEnabled: true,
     });
   } catch (error) {
@@ -125,16 +151,19 @@ export async function markAsRead(req: AuthenticatedRequest, res: Response) {
 
   try {
     if (id === 'all') {
-      await prisma.notification.updateMany({
-        where: { userId, isRead: false },
-        data: { isRead: true },
-      });
+      const [liveAlerts, dismissedIds] = await Promise.all([getLiveAlerts(userId), getDismissedAlertIds(userId)]);
+      await Promise.all([
+        prisma.notification.updateMany({ where: { userId, isRead: false }, data: { isRead: true } }),
+        saveDismissedAlertIds(userId, [...dismissedIds, ...liveAlerts.map((alert) => alert.id)]),
+      ]);
       return res.json({ message: 'All notifications marked as read' });
     }
 
     // Live alerts (today's vacating tenants, rent due/overdue) are computed on the fly and
     // aren't persisted rows, so there's nothing to mark read — they resolve on their own.
     if (id.startsWith('alert-')) {
+      const dismissedIds = await getDismissedAlertIds(userId);
+      await saveDismissedAlertIds(userId, [...dismissedIds, id]);
       return res.json({ message: 'Live alert acknowledged' });
     }
 
@@ -155,5 +184,25 @@ export async function markAsRead(req: AuthenticatedRequest, res: Response) {
   } catch (error) {
     console.error('Mark notification as read error:', error);
     res.status(500).json({ error: 'Failed to update notification' });
+  }
+}
+
+export async function deleteNotification(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.id;
+  const { id } = req.params;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    if (id.startsWith('alert-')) {
+      const dismissedIds = await getDismissedAlertIds(userId);
+      await saveDismissedAlertIds(userId, [...dismissedIds, id]);
+    } else {
+      const result = await prisma.notification.deleteMany({ where: { id, userId } });
+      if (result.count === 0) return res.status(404).json({ error: 'Notification not found' });
+    }
+    res.json({ message: 'Notification removed' });
+  } catch (error) {
+    console.error('Delete notification error:', error);
+    res.status(500).json({ error: 'Failed to remove notification' });
   }
 }
