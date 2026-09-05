@@ -41,7 +41,7 @@ export default function BranchListScreen({ navigation }: BranchListScreenProps) 
             </View>
             <View style={[styles.badge, { backgroundColor: item.status === 'ACTIVE' ? '#D1FAE5' : '#F3F4F6' }]}>
               <Text style={[styles.badgeText, { color: item.status === 'ACTIVE' ? '#065F46' : '#475569' }]}>
-                {item.status}
+                {item.status === 'ACTIVE' ? 'Open' : 'Closed'}
               </Text>
             </View>
           </View>
@@ -52,12 +52,12 @@ export default function BranchListScreen({ navigation }: BranchListScreenProps) 
               <Text variant="bodySmall" style={styles.statLabel}>Rooms</Text>
             </View>
             <View style={styles.statBox}>
-              <Text variant="titleMedium" style={styles.statVal}>{item.occupancyPercentage}%</Text>
-              <Text variant="bodySmall" style={styles.statLabel}>Occupancy</Text>
+              <Text variant="titleMedium" style={styles.statVal}>{item.totalBeds - item.vacantBeds} of {item.totalBeds}</Text>
+              <Text variant="bodySmall" style={styles.statLabel}>Beds in use</Text>
             </View>
             <View style={styles.statBox}>
               <Text variant="titleMedium" style={styles.statVal}>{item.vacantBeds}</Text>
-              <Text variant="bodySmall" style={styles.statLabel}>Vacant Beds</Text>
+              <Text variant="bodySmall" style={styles.statLabel}>Free beds</Text>
             </View>
           </View>
 
@@ -65,7 +65,7 @@ export default function BranchListScreen({ navigation }: BranchListScreenProps) 
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Icon name="cash-remove" size={16} color={theme.colors.error} />
               <Text style={[styles.footerText, { color: theme.colors.error, fontWeight: '700', marginLeft: 4 }]}>
-                Unpaid: ₹{item.pendingPayments}
+                Rent still due: ₹{item.pendingPayments}
               </Text>
             </View>
             <Icon name="chevron-right" size={20} color="#64748B" />
@@ -78,7 +78,7 @@ export default function BranchListScreen({ navigation }: BranchListScreenProps) 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Searchbar
-        placeholder="Search branches..."
+        placeholder="Search hostel branches…"
         onChangeText={setSearchQuery}
         value={searchQuery}
         style={styles.searchBar}
@@ -101,8 +101,8 @@ export default function BranchListScreen({ navigation }: BranchListScreenProps) 
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Icon name="office-building-marker-outline" size={64} color="#94A3B8" />
-              <Text variant="titleMedium" style={styles.emptyTitle}>No Branches Found</Text>
-              <Text variant="bodyMedium" style={styles.emptyDesc}>Get started by creating your first hostel branch.</Text>
+              <Text variant="titleMedium" style={styles.emptyTitle}>No hostel branches found</Text>
+              <Text variant="bodyMedium" style={styles.emptyDesc}>Add your first hostel location to get started.</Text>
             </View>
           }
         />

@@ -132,18 +132,20 @@ export async function moveTenant(req: AuthenticatedRequest, res: Response) {
     // Verify space in new room
     const newRoom = await prisma.room.findUnique({
       where: { id: newRoomId },
-      include: { tenants: { where: { status: 'ACTIVE' } }, branch: true },
+      include: { tenants: { where: { status: 'ACTIVE' } }, bookings: true, branch: true },
     });
 
     if (!newRoom || newRoom.branch.userId !== userId) {
       return res.status(404).json({ error: 'Selected room not found' });
     }
 
-    if (newRoom.tenants.length >= newRoom.capacity) {
+    const reservedBeds = newRoom.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
+    if (newRoom.tenants.length + reservedBeds >= newRoom.capacity) {
       return res.status(400).json({ error: 'Selected room is already fully occupied' });
     }
 
     // Update Tenant Room assignment
+    await prisma.booking.deleteMany({ where: { tenantId: id } });
     const updated = await prisma.tenant.update({
       where: { id },
       data: { roomId: newRoomId },
@@ -198,6 +200,8 @@ export async function vacateTenant(req: AuthenticatedRequest, res: Response) {
         leavingDate: new Date(),
       },
     });
+
+    await prisma.booking.deleteMany({ where: { tenantId: id } });
 
     // Update room occupancy status
     await updateRoomOccupancyStatus(tenant.roomId);
@@ -284,6 +288,7 @@ export async function deleteTenant(req: AuthenticatedRequest, res: Response) {
     }
 
     const roomId = tenant.roomId;
+    await prisma.booking.deleteMany({ where: { tenantId: id } });
     await prisma.tenant.delete({ where: { id } });
 
     // Recalculate room occupancy status

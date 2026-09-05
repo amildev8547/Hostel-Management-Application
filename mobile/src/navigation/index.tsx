@@ -24,6 +24,8 @@ import AdmissionReviewScreen from '../screens/admissions/AdmissionReviewScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import PaymentsDashboardScreen from '../screens/payments/PaymentsDashboardScreen';
 import NotificationsScreen from '../screens/notifications/NotificationsScreen';
+import BookingListScreen from '../screens/bookings/BookingListScreen';
+import BookingFormScreen from '../screens/bookings/BookingFormScreen';
 
 // Stack Navigation Type Definitions
 export type RootStackParamList = {
@@ -38,6 +40,8 @@ export type RootStackParamList = {
   AdmissionReview: { applicationId: string };
   PaymentsDashboard: { branchId?: string };
   Notifications: undefined;
+  BookingList: undefined;
+  BookingForm: { branchId?: string } | undefined;
 };
 
 export type TabParamList = {
@@ -99,16 +103,20 @@ function TabNavigator() {
         },
         tabBarActiveTintColor: '#4F46E5',
         tabBarInactiveTintColor: '#64748B',
+        tabBarStyle: styles.tabBar,
+        tabBarItemStyle: styles.tabBarItem,
+        tabBarLabelStyle: styles.tabBarLabel,
+        tabBarIconStyle: styles.tabBarIcon,
         headerShown: true,
         headerStyle: { backgroundColor: '#FFFFFF' },
         headerTitleStyle: { fontWeight: '700', fontSize: 18, color: '#0F172A' },
         headerRight: () => <NotificationBell />,
       })}
     >
-      <Tab.Screen name="Home" component={DashboardScreen} options={{ title: 'Dashboard' }} />
-      <Tab.Screen name="Branches" component={BranchListScreen} options={{ title: 'Branches' }} />
-      <Tab.Screen name="Admissions" component={AdmissionsListScreen} options={{ title: 'Admissions' }} />
-      <Tab.Screen name="Tenants" component={TenantListScreen} options={{ title: 'Tenants' }} />
+      <Tab.Screen name="Home" component={DashboardScreen} options={{ title: 'Home' }} />
+      <Tab.Screen name="Branches" component={BranchListScreen} options={{ title: 'Hostel Branches', tabBarLabel: 'Hostels' }} />
+      <Tab.Screen name="Admissions" component={AdmissionsListScreen} options={{ title: 'Applications', tabBarLabel: 'Requests' }} />
+      <Tab.Screen name="Tenants" component={TenantListScreen} options={{ title: 'People Staying', tabBarLabel: 'Residents' }} />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
     </Tab.Navigator>
   );
@@ -121,24 +129,44 @@ export default function AppNavigator() {
       <RootStack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#FFFFFF' }, headerTitleStyle: { fontWeight: '600' } }}>
         <RootStack.Screen name="Main" component={TabNavigator} options={{ headerShown: false }} />
         <RootStack.Screen name="BranchDashboard" component={BranchDashboardScreen} options={({ route }) => ({ title: route.params.branchName })} />
-        <RootStack.Screen name="QRCode" component={QRCodeScreen} options={{ title: 'Admission QR Code' }} />
-        <RootStack.Screen name="BranchForm" component={BranchFormScreen} options={{ title: 'Branch Details' }} />
+        <RootStack.Screen name="QRCode" component={QRCodeScreen} options={{ title: 'Application QR Code' }} />
+        <RootStack.Screen name="BranchForm" component={BranchFormScreen} options={{ title: 'Hostel Branch Details' }} />
         <RootStack.Screen name="RoomDetails" component={RoomDetailsScreen} options={{ title: 'Room Details' }} />
         <RootStack.Screen name="RoomForm" component={RoomFormScreen} options={{ title: 'Room Details' }} />
-        <RootStack.Screen name="TenantProfile" component={TenantProfileScreen} options={{ title: 'Tenant Profile' }} />
-        <RootStack.Screen name="MoveTenant" component={MoveTenantScreen} options={{ title: 'Reallocate Room' }} />
-        <RootStack.Screen name="AdmissionReview" component={AdmissionReviewScreen} options={{ title: 'Review Application' }} />
-        <RootStack.Screen name="PaymentsDashboard" component={PaymentsDashboardScreen} options={{ title: 'Payments Summary' }} />
+        <RootStack.Screen name="TenantProfile" component={TenantProfileScreen} options={{ title: 'Resident Details' }} />
+        <RootStack.Screen name="MoveTenant" component={MoveTenantScreen} options={{ title: 'Move to Another Room' }} />
+        <RootStack.Screen name="AdmissionReview" component={AdmissionReviewScreen} options={{ title: 'Check Application' }} />
+        <RootStack.Screen name="PaymentsDashboard" component={PaymentsDashboardScreen} options={{ title: 'Rent Payments' }} />
         <RootStack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
+        <RootStack.Screen name="BookingList" component={BookingListScreen} options={{ title: 'Bed Bookings' }} />
+        <RootStack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Book a Bed' }} />
       </RootStack.Navigator>
     </NavigationContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  tabBar: {
+    height: 78,
+    paddingTop: 8,
+    paddingBottom: 9,
+    borderTopColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  tabBarItem: {
+    paddingVertical: 2,
+  },
+  tabBarLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  tabBarIcon: {
+    marginTop: 1,
+  },
   bellButton: {
-    marginRight: 16,
-    padding: 4,
+    marginRight: 12,
+    padding: 10,
   },
   bellBadge: {
     position: 'absolute',

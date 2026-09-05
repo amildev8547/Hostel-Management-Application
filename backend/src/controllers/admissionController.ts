@@ -8,6 +8,8 @@ import { buildUpiPaymentUrl, getSettingValue } from '../utils/upi';
 // Public endpoint: Submit application
 export async function submitAdmissionApplication(req: Request, res: Response) {
   let currentStep = 'validating application';
+  let claimedBookingId: string | null = null;
+  let bookingApplicationCreated = false;
   const {
     name,
     phone,
@@ -26,12 +28,23 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     aadhaarBack, // base64
     notes,
     branchId,
+    bookingToken,
   } = req.body;
 
   try {
+    const booking = bookingToken
+      ? await prisma.booking.findUnique({ where: { secureToken: bookingToken }, include: { room: true } })
+      : null;
+    if (bookingToken && (!booking || booking.status !== 'RESERVED')) {
+      return res.status(409).json({ error: 'This booking link is no longer active. Please contact the hostel owner.' });
+    }
+    const selectedBranchId = booking?.branchId || branchId;
+    const selectedName = booking?.name || name;
+    const selectedPhone = booking?.phone || phone;
+
     currentStep = 'checking selected branch';
     const branch = await prisma.branch.findUnique({
-      where: { id: branchId },
+      where: { id: selectedBranchId },
       include: {
         user: {
           include: { settings: true },
@@ -47,13 +60,13 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     // pricing — never trust a client-supplied amount, since that would let an applicant
     // pay whatever they want by editing the request.
     currentStep = 'checking room pricing';
-    const matchingRoom = await prisma.room.findFirst({
-      where: { branchId, roomType: preferredRoomType },
+    const matchingRoom = booking?.room || await prisma.room.findFirst({
+      where: { branchId: selectedBranchId, roomType: preferredRoomType },
       orderBy: { admissionFee: 'asc' },
     });
     const fallbackRoom = matchingRoom
       ? null
-      : await prisma.room.findFirst({ where: { branchId }, orderBy: { admissionFee: 'asc' } });
+      : await prisma.room.findFirst({ where: { branchId: selectedBranchId }, orderBy: { admissionFee: 'asc' } });
     const amount = matchingRoom?.admissionFee ?? fallbackRoom?.admissionFee ?? 1500;
 
     // 1. Upload files to S3 / Local storage
@@ -65,12 +78,18 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     const aadhaarFrontUpload = await uploadFile(aadhaarFront, 'aadhaar_front.jpg', 'aadhaar_documents', requestBaseUrl);
     const aadhaarBackUpload = await uploadFile(aadhaarBack, 'aadhaar_back.jpg', 'aadhaar_documents', requestBaseUrl);
 
+    if (booking) {
+      const claim = await prisma.booking.updateMany({ where: { id: booking.id, status: 'RESERVED' }, data: { status: 'FORM_SUBMITTED' } });
+      if (claim.count !== 1) return res.status(409).json({ error: 'This booking form has already been submitted.' });
+      claimedBookingId = booking.id;
+    }
+
     // 2. Create AdmissionApplication record
     currentStep = 'saving application';
     const application = await prisma.admissionApplication.create({
       data: {
-        name,
-        phone,
+        name: selectedName,
+        phone: selectedPhone,
         whatsappNumber,
         address,
         guardianName,
@@ -78,14 +97,14 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
         nearestPoliceStation,
         occupation,
         workLocation,
-        preferredRoomType,
-        joiningDate: new Date(joiningDate),
+        preferredRoomType: booking?.room.roomType || preferredRoomType,
+        joiningDate: booking?.expectedJoiningDate || new Date(joiningDate),
         leavingDate: leavingDate ? new Date(leavingDate) : null,
         profilePhotoUrl: profileUpload.url,
         aadhaarFrontUrl: aadhaarFrontUpload.url,
         aadhaarBackUrl: aadhaarBackUpload.url,
         notes,
-        branchId,
+        branchId: selectedBranchId,
         status: 'PENDING',
         paymentStatus: 'PENDING',
       },
@@ -128,7 +147,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
         paymentType: 'ADMISSION',
         dueDate: new Date(),
         admissionApplicationId: application.id,
-        branchId,
+        branchId: selectedBranchId,
       },
     });
 
@@ -140,6 +159,11 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
       amount,
       note: `HostelHub ADMISSION ${payment.id}`,
     });
+    bookingApplicationCreated = true;
+
+    if (booking) {
+      await prisma.booking.update({ where: { id: booking.id }, data: { admissionApplicationId: application.id } });
+    }
     await prisma.payment.update({
       where: { id: payment.id },
       data: {
@@ -159,6 +183,9 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
         : 'Application recorded. Please pay by UPI and share the screenshot on WhatsApp.',
     });
   } catch (error) {
+    if (claimedBookingId && !bookingApplicationCreated) {
+      await prisma.booking.updateMany({ where: { id: claimedBookingId, status: 'FORM_SUBMITTED' }, data: { status: 'RESERVED' } }).catch(() => undefined);
+    }
     console.error('Submit admission application error:', error);
     res.status(500).json({
       error: `Failed while ${currentStep}. Please try again or contact the hostel owner.`,
@@ -213,6 +240,7 @@ export async function getAdmissionApplicationById(req: AuthenticatedRequest, res
         branch: true,
         payments: true,
         documents: true,
+        booking: { include: { room: true } },
       },
     });
 
@@ -232,6 +260,7 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
   const { id } = req.params;
   const { status, roomId } = req.body; // status: APPROVED or REJECTED
   const userId = req.user?.id;
+  let reviewClaimed = false;
 
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -245,6 +274,7 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
       include: {
         branch: true,
         documents: true,
+        booking: true,
       },
     });
 
@@ -256,22 +286,33 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
       return res.status(400).json({ error: 'This application has already been processed.' });
     }
 
+    const claim = await prisma.admissionApplication.updateMany({
+      where: { id, status: 'PENDING' },
+      data: { status: 'PROCESSING' },
+    });
+    if (claim.count !== 1) {
+      return res.status(409).json({ error: 'This application is already being reviewed.' });
+    }
+    reviewClaimed = true;
+
     if (status === 'APPROVED') {
-      if (!roomId) {
+      const selectedRoomId = application.booking?.roomId || roomId;
+      if (!selectedRoomId) {
         return res.status(400).json({ error: 'Room selection is required for approval.' });
       }
 
       // Check room availability
       const room = await prisma.room.findUnique({
-        where: { id: roomId },
-        include: { tenants: { where: { status: 'ACTIVE' } } },
+        where: { id: selectedRoomId },
+        include: { tenants: { where: { status: 'ACTIVE' } }, bookings: true },
       });
 
       if (!room || room.branchId !== application.branchId) {
         return res.status(404).json({ error: 'Selected room not found in the preferred branch.' });
       }
 
-      if (room.tenants.length >= room.capacity) {
+      const otherReservations = room.bookings.filter((item) => item.status !== 'OCCUPIED' && item.id !== application.booking?.id).length;
+      if (room.tenants.length + otherReservations >= room.capacity) {
         return res.status(400).json({ error: 'Selected room is fully occupied.' });
       }
 
@@ -293,7 +334,7 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
           profilePhotoUrl: application.profilePhotoUrl,
           aadhaarFrontUrl: application.aadhaarFrontUrl,
           aadhaarBackUrl: application.aadhaarBackUrl,
-          roomId,
+          roomId: selectedRoomId,
         },
       });
 
@@ -315,8 +356,12 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
         data: { status: 'APPROVED' },
       });
 
+      if (application.booking) {
+        await prisma.booking.update({ where: { id: application.booking.id }, data: { status: 'OCCUPIED', tenantId: tenant.id } });
+      }
+
       // 5. Update Room occupancy
-      await updateRoomOccupancyStatus(roomId);
+      await updateRoomOccupancyStatus(selectedRoomId);
 
       // 6. Notify Owner
       await prisma.notification.create({
@@ -336,6 +381,11 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
         data: { status: 'REJECTED' },
       });
 
+      if (application.booking) {
+        await prisma.booking.delete({ where: { id: application.booking.id } });
+        await updateRoomOccupancyStatus(application.booking.roomId);
+      }
+
       await prisma.notification.create({
         data: {
           title: 'Admission Rejected',
@@ -348,6 +398,9 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
       return res.json({ message: 'Application rejected.' });
     }
   } catch (error) {
+    if (reviewClaimed) {
+      await prisma.admissionApplication.updateMany({ where: { id, status: 'PROCESSING' }, data: { status: 'PENDING' } }).catch(() => undefined);
+    }
     console.error('Review application error:', error);
     res.status(500).json({ error: 'Failed to complete application review' });
   }

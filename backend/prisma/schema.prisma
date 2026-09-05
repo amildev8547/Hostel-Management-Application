@@ -16,6 +16,7 @@ model User {
   branches      Branch[]
   notifications Notification[]
   settings      Setting[]
+  bookings      Booking[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -35,6 +36,7 @@ model Branch {
   rooms                Room[]
   admissionApplications AdmissionApplication[]
   payments             Payment[]
+  bookings             Booking[]
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 
@@ -53,6 +55,7 @@ model Room {
   branchId     String   @db.ObjectId
   branch       Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
   tenants      Tenant[]
+  bookings     Booking[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -80,10 +83,37 @@ model Tenant {
   room                 Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
   payments             Payment[]
   documents            Document[]
+  booking              Booking?
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
   @@map("tenants")
+}
+
+model Booking {
+  id                     String                @id @default(auto()) @map("_id") @db.ObjectId
+  name                   String
+  phone                  String
+  bedNumber              Int
+  expectedJoiningDate    DateTime
+  notes                  String?
+  status                 String                @default("RESERVED") // RESERVED, FORM_SUBMITTED, OCCUPIED
+  secureToken            String                @unique
+  userId                 String                @db.ObjectId
+  user                   User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branchId               String                @db.ObjectId
+  branch                 Branch                @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  roomId                 String                @db.ObjectId
+  room                   Room                  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  admissionApplicationId String?               @unique @db.ObjectId
+  admissionApplication   AdmissionApplication? @relation(fields: [admissionApplicationId], references: [id], onDelete: SetNull)
+  tenantId                String?               @unique @db.ObjectId
+  tenant                  Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  @@unique([roomId, bedNumber])
+  @@map("bookings")
 }
 
 model AdmissionApplication {
@@ -111,6 +141,7 @@ model AdmissionApplication {
   branch               Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
   payments             Payment[]
   documents            Document[]
+  booking              Booking?
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
 

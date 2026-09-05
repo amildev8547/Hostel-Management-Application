@@ -59,7 +59,7 @@ export default function QRCodeScreen({ route, navigation }: QRCodeScreenProps) {
           <View style={styles.gradientOverlay} />
         </View>
         <Icon name="qrcode-scan" size={36} color="#FFFFFF" style={{ marginBottom: 8 }} />
-        <Text style={styles.headerTitle}>Scan to Apply</Text>
+        <Text style={styles.headerTitle}>Scan to open application</Text>
         <Text style={styles.headerSubtitle}>{branchName}</Text>
       </View>
 
@@ -78,7 +78,7 @@ export default function QRCodeScreen({ route, navigation }: QRCodeScreenProps) {
         </View>
 
         <Text style={styles.qrLabel}>
-          Point the tenant's phone camera at this code
+          Ask the applicant to point their phone camera at this code
         </Text>
 
         <View style={styles.urlBox}>
@@ -99,7 +99,7 @@ export default function QRCodeScreen({ route, navigation }: QRCodeScreenProps) {
           contentStyle={styles.actionBtnContent}
           labelStyle={styles.actionBtnLabel}
         >
-          Share Link
+          Share application link
         </Button>
         <Button
           mode="outlined"
@@ -109,7 +109,7 @@ export default function QRCodeScreen({ route, navigation }: QRCodeScreenProps) {
           contentStyle={styles.actionBtnContent}
           labelStyle={[styles.actionBtnLabel, { color: theme.colors.primary }]}
         >
-          Copy URL
+          Copy link
         </Button>
       </View>
 
@@ -117,18 +117,18 @@ export default function QRCodeScreen({ route, navigation }: QRCodeScreenProps) {
       <Surface style={styles.tipCard} elevation={1}>
         <View style={styles.tipHeader}>
           <Icon name="lightbulb-on-outline" size={20} color="#F59E0B" />
-          <Text style={styles.tipTitle}>How it Works</Text>
+          <Text style={styles.tipTitle}>What happens next</Text>
         </View>
         <Text style={styles.tipText}>
-          Show this QR code to the prospective tenant. They scan it with their
+          Show this QR code to the person applying. They scan it with their
           phone's camera to open the admission form, fill in their details, upload
-          documents, and pay the admission fee — all from their own device.
+          documents, and follows the payment instructions — all from their own phone.
         </Text>
         <View style={styles.tipSteps}>
-          <StepItem number="1" text="Tenant scans QR code" />
-          <StepItem number="2" text="Fills the admission form" />
-          <StepItem number="3" text="Pays admission fee online" />
-          <StepItem number="4" text="You review & approve in app" />
+          <StepItem number="1" text="Applicant scans the QR code" />
+          <StepItem number="2" text="Fills in the application" />
+          <StepItem number="3" text="Follows the payment instructions" />
+          <StepItem number="4" text="You check and accept the application" />
         </View>
       </Surface>
     </ScrollView>

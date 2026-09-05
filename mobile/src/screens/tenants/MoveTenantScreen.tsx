@@ -52,7 +52,7 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
 
   const handleMoveRoom = async () => {
     if (!selectedRoomId) {
-      showAlert('Please select a room to move the tenant to.');
+      showAlert('Please choose the new room first.');
       return;
     }
 
@@ -64,10 +64,10 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
         tenantId,
         roomId: tenant?.roomId,
       });
-      showAlert('Tenant moved successfully', 'Success', () => navigation.pop(2)); // Go back to profile screen and refresh it
+      showAlert('The resident was moved to the selected room.', 'Success', () => navigation.pop(2)); // Go back to profile screen and refresh it
     } catch (err: any) {
       console.error(err);
-      showAlert(err.response?.data?.error || 'Failed to move tenant');
+      showAlert(err.response?.data?.error || 'Could not move this resident.');
     } finally {
       setIsSubmitting(false);
     }
@@ -76,7 +76,7 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
   if (tenantLoading || roomsLoading) {
     return (
       <View style={styles.center}>
-        <Text>Loading Room Transfer Details...</Text>
+        <Text>Loading available rooms…</Text>
       </View>
     );
   }
@@ -85,16 +85,17 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         <Surface style={styles.summaryCard} elevation={1}>
-          <Text variant="titleMedium" style={{ fontWeight: '800' }}>Reallocating Tenant</Text>
+          <Text variant="titleMedium" style={{ fontWeight: '800' }}>Moving this person</Text>
           <Text variant="bodyLarge" style={{ fontWeight: '600', color: theme.colors.primary, marginTop: 4 }}>
             {tenant.name}
           </Text>
           <Text variant="bodyMedium" style={{ color: '#64748B', marginTop: 2 }}>
-            Current Room: Room {tenant.room.roomNumber} ({tenant.room.roomType})
+            Current room: {tenant.room.roomNumber} ({String(tenant.room.roomType).replace('Share', 'people')})
           </Text>
         </Surface>
 
-        <Text variant="titleMedium" style={styles.sectionTitle}>Select New Room</Text>
+        <Text variant="titleMedium" style={styles.sectionTitle}>Choose the new room</Text>
+        <Text style={styles.helpText}>Only rooms with a free bed are shown. Tap a room to select it.</Text>
 
         <RadioButton.Group onValueChange={(val) => setSelectedRoomId(val)} value={selectedRoomId}>
           {rooms && rooms.length > 0 ? (
@@ -113,7 +114,7 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={{ fontWeight: '700', color: theme.colors.primary }}>₹{room.monthlyRent}</Text>
                     <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
-                      🛏️ {room.occupied} / {room.capacity} occupied
+                      🛏️ {room.occupied} of {room.capacity} beds in use
                     </Text>
                   </View>
                 </Card.Content>
@@ -123,7 +124,7 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
             <View style={styles.emptyContainer}>
               <Icon name="door-closed-lock" size={48} color="#94A3B8" />
               <Text style={{ marginTop: 8, color: '#64748B', fontWeight: '500', textAlign: 'center' }}>
-                No other available rooms in this branch
+                No other rooms have a free bed in this branch
               </Text>
             </View>
           )}
@@ -136,7 +137,7 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
           disabled={isSubmitting || !selectedRoomId}
           loading={isSubmitting}
         >
-          Confirm Reallocation
+          Move to selected room
         </Button>
       </ScrollView>
     </View>
@@ -161,8 +162,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 12,
+    marginBottom: 4,
   },
+  helpText: { color: '#64748B', fontSize: 14, lineHeight: 20, marginBottom: 14 },
   roomCard: {
     marginBottom: 10,
     backgroundColor: '#FFFFFF',
@@ -180,8 +182,8 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     marginTop: 20,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 9,
+    borderRadius: 12,
   },
   emptyContainer: {
     alignItems: 'center',

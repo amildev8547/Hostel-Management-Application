@@ -17,6 +17,7 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
             tenants: {
               where: { status: 'ACTIVE' },
             },
+            bookings: true,
           },
         },
       },
@@ -26,16 +27,18 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
     let totalRooms = 0;
     let totalCapacity = 0;
     let occupiedBeds = 0;
+    let reservedBeds = 0;
 
     branches.forEach((branch) => {
       totalRooms += branch.rooms.length;
       branch.rooms.forEach((room) => {
         totalCapacity += room.capacity;
         occupiedBeds += room.tenants.length;
+        reservedBeds += room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
       });
     });
 
-    const vacantBeds = totalCapacity - occupiedBeds;
+    const vacantBeds = Math.max(0, totalCapacity - occupiedBeds - reservedBeds);
     const occupancyPercentage = totalCapacity > 0 ? Math.round((occupiedBeds / totalCapacity) * 100) : 0;
 
     // 2. Fetch payments for current month to compute collection metrics
@@ -119,6 +122,7 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
         totalRooms,
         totalCapacity,
         occupiedBeds,
+        reservedBeds,
         vacantBeds,
         occupancyPercentage,
         monthlyCollection,

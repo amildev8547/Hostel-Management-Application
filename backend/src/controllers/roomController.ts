@@ -62,6 +62,7 @@ export async function getRooms(req: AuthenticatedRequest, res: Response) {
         tenants: {
           where: { status: 'ACTIVE' },
         },
+        bookings: { select: { status: true } },
       },
       orderBy: { roomNumber: 'asc' },
     });
@@ -69,10 +70,12 @@ export async function getRooms(req: AuthenticatedRequest, res: Response) {
     // Map to include vacancy metrics in response
     const results = rooms.map((room) => {
       const occupied = room.tenants.length;
+      const reserved = room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
       return {
         ...room,
         occupied,
-        vacant: room.capacity - occupied,
+        reserved,
+        vacant: Math.max(0, room.capacity - occupied - reserved),
       };
     });
 
@@ -97,6 +100,7 @@ export async function getRoomById(req: AuthenticatedRequest, res: Response) {
         tenants: {
           where: { status: 'ACTIVE' },
         },
+        bookings: { select: { status: true } },
       },
     });
 
@@ -113,10 +117,12 @@ export async function getRoomById(req: AuthenticatedRequest, res: Response) {
     });
 
     const occupied = room.tenants.length;
+    const reserved = room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
     res.json({
       ...room,
       occupied,
-      vacant: room.capacity - occupied,
+      reserved,
+      vacant: Math.max(0, room.capacity - occupied - reserved),
       occupancyPercentage: room.capacity > 0 ? Math.round((occupied / room.capacity) * 100) : 0,
       paymentHistory: payments,
     });

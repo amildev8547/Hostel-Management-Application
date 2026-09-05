@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Image, Modal, TouchableOpacity } from 'react-native';
 import { Text, Surface, Card, Button, useTheme, Divider, SegmentedButtons } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -35,13 +35,17 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
     },
   });
 
+  useEffect(() => {
+    if (application?.booking?.roomId) setSelectedRoomId(application.booking.roomId);
+  }, [application?.booking?.roomId]);
+
   // Fetch vacant/partial rooms in the branch for allocation
   const { data: rooms, isLoading: roomsLoading } = useQuery<any[]>({
     queryKey: ['allocationRooms', application?.branchId],
     queryFn: async () => {
       const response = await apiClient.get('/rooms', { params: { branchId: application.branchId } });
       // Only show rooms with vacancy
-      return response.data.filter((r: any) => r.status !== 'FULL' && r.status !== 'MAINTENANCE');
+      return response.data.filter((r: any) => r.vacant > 0 && r.status !== 'MAINTENANCE');
     },
     enabled: !!application && application.status === 'PENDING',
   });
@@ -64,7 +68,8 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
           applicationId,
           roomId: selectedRoomId,
         });
-        showAlert(`Application successfully ${status.toLowerCase()}`, 'Success', () => navigation.goBack());
+        await queryClient.invalidateQueries({ queryKey: ['bookings'] });
+        showAlert(status === 'APPROVED' ? 'Application accepted and room assigned.' : 'Application declined.', 'Success', () => navigation.goBack());
       } catch (err: any) {
         console.error(err);
         showAlert(err.response?.data?.error || 'Failed to complete review');
@@ -119,7 +124,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
           <View style={styles.headerInfo}>
             <Text variant="headlineSmall" style={styles.applicantName}>{application.name}</Text>
             <Text variant="bodyMedium" style={{ color: '#64748B', marginTop: 4 }}>
-              Apply Branch: {application.branch.name}
+              Wants to stay at: {application.branch.name}
             </Text>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
               <View
@@ -147,7 +152,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
                         : '#B91C1C',
                   }}
                 >
-                  Status: {application.status}
+                  {application.status === 'PENDING' ? 'Waiting for your decision' : application.status === 'APPROVED' ? 'Accepted' : 'Not accepted'}
                 </Text>
               </View>
 
@@ -166,7 +171,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
                     color: application.paymentStatus === 'PAID' ? '#065F46' : '#D97706',
                   }}
                 >
-                  Fee: {application.paymentStatus}
+                  Joining fee: {application.paymentStatus === 'PAID' ? 'Paid' : 'Not paid'}
                 </Text>
               </View>
             </View>
@@ -175,7 +180,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
       </Surface>
 
       {/* 2. Applicant details */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Application Details</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>Personal and contact information</Text>
       <Card style={styles.infoCard}>
         <Card.Content>
           <View style={styles.detailsGrid}>
@@ -188,11 +193,11 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
               <Text style={styles.detailVal}>+91 {application.whatsappNumber}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Occupation</Text>
+              <Text style={styles.detailLabel}>Work or studies</Text>
               <Text style={styles.detailVal}>{application.occupation}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Work/Study Location</Text>
+              <Text style={styles.detailLabel}>Work or college location</Text>
               <Text style={styles.detailVal}>{application.workLocation}</Text>
             </View>
             <View style={styles.detailRow}>
@@ -204,11 +209,11 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
               <Text style={styles.detailVal}>{application.guardianPhone}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Preferred Sharing</Text>
-              <Text style={styles.detailVal}>{application.preferredRoomType} sharing</Text>
+              <Text style={styles.detailLabel}>Preferred room type</Text>
+              <Text style={styles.detailVal}>{String(application.preferredRoomType).replace('Share', 'people')}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Expected Joining Date</Text>
+              <Text style={styles.detailLabel}>Plans to move in on</Text>
               <Text style={styles.detailVal}>{new Date(application.joiningDate).toLocaleDateString()}</Text>
             </View>
             <View style={styles.detailRow}>
@@ -221,7 +226,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
             </View>
             {application.notes && (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Applicant Notes</Text>
+                <Text style={styles.detailLabel}>Message from applicant</Text>
                 <Text style={styles.detailVal}>{application.notes}</Text>
               </View>
             )}
@@ -230,7 +235,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
       </Card>
 
       {/* 3. Uploaded documents */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Identity Verification Documents</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>Identity documents</Text>
       <Card style={styles.infoCard}>
         <Card.Content>
           <View style={styles.docsRow}>
@@ -258,19 +263,25 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
       {/* 4. Room Allocation - Show only when PENDING */}
       {application.status === 'PENDING' && (
         <>
-          <Text variant="titleMedium" style={styles.sectionTitle}>Room Allocation</Text>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Choose a room</Text>
           <Card style={styles.infoCard}>
             <Card.Content>
               <Text variant="bodySmall" style={{ color: '#64748B', marginBottom: 12 }}>
-                Select a room in {application.branch.name} to allocate this resident:
+                Choose where {application.name} will stay. Only rooms with a free bed are shown.
               </Text>
-              {roomsLoading ? (
+              {application.booking ? (
+                <Surface style={{ padding: 14, borderRadius: 12, backgroundColor: '#FEF3C7' }} elevation={0}>
+                  <Text style={{ color: '#78350F', fontWeight: '800' }}>Reserved room and bed</Text>
+                  <Text style={{ color: '#57534E', marginTop: 5 }}>Room {application.booking.room.roomNumber} · Bed {application.booking.bedNumber}</Text>
+                  <Text style={{ color: '#57534E', marginTop: 3 }}>This reserved place will be used when you accept the application.</Text>
+                </Surface>
+              ) : roomsLoading ? (
                 <Text>Loading available rooms...</Text>
               ) : rooms && rooms.length > 0 ? (
                 <ScrollView style={{ maxHeight: 200 }}>
                   <RadioButtonGroup
                     options={rooms.map((r: any) => ({
-                      label: `Room ${r.roomNumber} (${r.roomType}) - ${r.occupied}/${r.capacity} occupied`,
+                      label: `Room ${r.roomNumber} · ${r.occupied} of ${r.capacity} beds in use`,
                       value: r.id,
                     }))}
                     selectedValue={selectedRoomId}
@@ -295,7 +306,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
               disabled={isProcessing || !selectedRoomId}
               loading={isProcessing}
             >
-              Approve & Assign
+              Accept and assign room
             </Button>
             <Button
               mode="outlined"
@@ -305,7 +316,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
               onPress={() => handleProcess('REJECTED')}
               disabled={isProcessing}
             >
-              Reject
+              Decline request
             </Button>
           </View>
         </>
@@ -325,7 +336,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
               color: application.status === 'APPROVED' ? '#065F46' : '#991B1B',
             }}
           >
-            This application has been processed as {application.status.toUpperCase()}.
+            This application was {application.status === 'APPROVED' ? 'accepted' : 'not accepted'}.
           </Text>
         </Surface>
       )}
@@ -476,14 +487,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionRow: {
-    flexDirection: 'row',
     marginHorizontal: 16,
     gap: 12,
     marginTop: 8,
   },
   actionBtn: {
-    flex: 1,
-    borderRadius: 8,
+    borderRadius: 12,
+    minHeight: 50,
+    justifyContent: 'center',
   },
   processedBanner: {
     flexDirection: 'row',

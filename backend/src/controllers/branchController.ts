@@ -53,6 +53,7 @@ export async function getBranches(req: AuthenticatedRequest, res: Response) {
             tenants: {
               where: { status: 'ACTIVE' },
             },
+            bookings: true,
           },
         },
       },
@@ -83,10 +84,12 @@ export async function getBranches(req: AuthenticatedRequest, res: Response) {
         let totalRooms = branch.rooms.length;
         let totalBeds = 0;
         let occupiedBeds = 0;
+        let reservedBeds = 0;
 
         branch.rooms.forEach((room) => {
           totalBeds += room.capacity;
           occupiedBeds += room.tenants.length;
+          reservedBeds += room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
         });
 
         return {
@@ -97,7 +100,9 @@ export async function getBranches(req: AuthenticatedRequest, res: Response) {
           status: branch.status,
           totalRooms,
           totalBeds,
-          vacantBeds: totalBeds - occupiedBeds,
+          occupiedBeds,
+          reservedBeds,
+          vacantBeds: Math.max(0, totalBeds - occupiedBeds - reservedBeds),
           occupancyPercentage: totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0,
           pendingPayments: pendingPaymentsByBranch[branch.id] || 0,
         };

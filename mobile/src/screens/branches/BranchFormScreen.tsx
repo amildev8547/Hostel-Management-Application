@@ -119,15 +119,16 @@ export default function BranchFormScreen({ route, navigation }: BranchFormScreen
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         <Surface style={styles.card} elevation={1}>
           <Text variant="titleLarge" style={styles.title}>
-            {branchId ? 'Edit Branch' : 'Create New Branch'}
+            {branchId ? 'Change hostel branch details' : 'Add a hostel branch'}
           </Text>
+          <Text style={styles.helpText}>Enter the name and full address people use to identify this hostel location.</Text>
 
           <Controller
             control={control}
             name="name"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                label="Branch Name *"
+                label="Hostel branch name *"
                 value={value}
                 onBlur={onBlur}
                 onChangeText={onChange}
@@ -159,14 +160,14 @@ export default function BranchFormScreen({ route, navigation }: BranchFormScreen
           {errors.address && <HelperText type="error">{errors.address.message}</HelperText>}
 
           {/* Status Segment */}
-          <Text variant="labelMedium" style={styles.statusLabel}>Branch Status</Text>
+          <Text variant="labelMedium" style={styles.statusLabel}>Is this branch currently open?</Text>
           <View style={{ marginBottom: 20 }}>
             <SegmentedButtons
               value={statusVal}
               onValueChange={setStatusVal}
               buttons={[
-                { value: 'ACTIVE', label: 'Active', icon: 'check-circle' },
-                { value: 'INACTIVE', label: 'Inactive', icon: 'close-circle' },
+                { value: 'ACTIVE', label: 'Open', icon: 'check-circle' },
+                { value: 'INACTIVE', label: 'Closed', icon: 'close-circle' },
               ]}
             />
           </View>
@@ -178,7 +179,7 @@ export default function BranchFormScreen({ route, navigation }: BranchFormScreen
             disabled={isSubmitting}
             style={styles.submitBtn}
           >
-            Save Branch Details
+            {branchId ? 'Save changes' : 'Add hostel branch'}
           </Button>
 
           {branchId && (
@@ -189,7 +190,7 @@ export default function BranchFormScreen({ route, navigation }: BranchFormScreen
               style={{ marginTop: 10 }}
               disabled={isSubmitting}
             >
-              Delete Branch
+              Delete this branch
             </Button>
           )}
         </Surface>
@@ -213,9 +214,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: '800',
-    marginBottom: 20,
+    marginBottom: 6,
     color: '#0F172A',
   },
+  helpText: { color: '#64748B', fontSize: 14, lineHeight: 20, marginBottom: 20 },
   input: {
     marginBottom: 8,
     backgroundColor: '#FFFFFF',
@@ -227,8 +229,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   submitBtn: {
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 9,
+    borderRadius: 12,
     marginTop: 10,
   },
   center: {

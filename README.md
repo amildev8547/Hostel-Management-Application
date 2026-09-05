@@ -6,6 +6,14 @@ This codebase is split into two primary components:
 1. **`backend/`**: A Node.js, Express, TypeScript, and Prisma backend configured to run with **MongoDB** and **Cloudinary**.
 2. **`mobile/`**: A React Native, Expo, and TypeScript mobile client utilizing React Native Paper, React Navigation, and React Query.
 
+### Bed booking lifecycle
+
+- Owners can reserve a numbered bed using basic details and share a secure admission link later.
+- The secure form locks and pre-fills the booked branch, room, bed, name, phone, and joining date.
+- Reserved beds are excluded from availability and protected from another booking, admission, or room move.
+- Approval converts the booking to an occupied bed. Cancellation or rejection releases it.
+- The backend start command applies the Prisma schema before starting so Render creates the MongoDB booking collection and unique bed lock.
+
 ---
 
 ## Workspace Directory Structure

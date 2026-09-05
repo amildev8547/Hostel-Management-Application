@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
-import { Searchbar, Card, Text, useTheme, SegmentedButtons } from 'react-native-paper';
+import { Searchbar, Card, Text, useTheme, SegmentedButtons, Button } from 'react-native-paper';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -70,7 +70,7 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
                   },
                 ]}
               >
-                Fee: {item.paymentStatus}
+                Joining fee: {item.paymentStatus === 'PAID' ? 'Paid' : 'Not paid'}
               </Text>
             </View>
             <Icon name="chevron-right" size={24} color="#94A3B8" style={{ marginTop: 14 }} />
@@ -82,8 +82,13 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={styles.introBox}>
+        <Text style={styles.introTitle}>Hostel applications</Text>
+        <Text style={styles.introText}>Tap a person to check their information and accept or decline their request.</Text>
+        <Button mode="contained" icon="bed" style={styles.bookingButton} onPress={() => navigation.navigate('BookingList')}>View and create bed bookings</Button>
+      </View>
       <Searchbar
-        placeholder="Search applications..."
+        placeholder="Search people who applied…"
         onChangeText={setSearchQuery}
         value={searchQuery}
         style={styles.searchBar}
@@ -95,16 +100,16 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
           value={statusFilter}
           onValueChange={setStatusFilter}
           buttons={[
-            { value: 'PENDING', label: 'Pending' },
-            { value: 'APPROVED', label: 'Approved' },
-            { value: 'REJECTED', label: 'Rejected' },
+            { value: 'PENDING', label: 'Waiting' },
+            { value: 'APPROVED', label: 'Accepted' },
+            { value: 'REJECTED', label: 'Not accepted' },
           ]}
         />
       </View>
 
       {isLoading ? (
         <View style={styles.center}>
-          <Text>Loading applications...</Text>
+          <Text>Loading applications…</Text>
         </View>
       ) : (
         <FlatList
@@ -118,8 +123,8 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Icon name="account-arrow-right-outline" size={64} color="#94A3B8" />
-              <Text variant="titleMedium" style={styles.emptyTitle}>No Applications Found</Text>
-              <Text variant="bodyMedium" style={styles.emptyDesc}>Try adjusting search queries or status filters.</Text>
+              <Text variant="titleMedium" style={styles.emptyTitle}>No applications found</Text>
+              <Text variant="bodyMedium" style={styles.emptyDesc}>Try another name or choose a different option above.</Text>
             </View>
           }
         />
@@ -132,9 +137,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  introBox: { marginHorizontal: 16, marginTop: 16, padding: 16, backgroundColor: '#FEF3C7', borderRadius: 16 },
+  introTitle: { color: '#78350F', fontSize: 18, fontWeight: '800' },
+  introText: { color: '#57534E', fontSize: 14, lineHeight: 20, marginTop: 4 },
+  bookingButton: { borderRadius: 12, marginTop: 12, minHeight: 46, justifyContent: 'center' },
   searchBar: {
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 12,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
   },
@@ -155,7 +164,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 14,
   },
   leftSection: {
     flexDirection: 'row',

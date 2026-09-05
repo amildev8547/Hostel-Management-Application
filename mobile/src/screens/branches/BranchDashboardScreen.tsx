@@ -19,10 +19,22 @@ interface BranchDashboardScreenProps {
   navigation: BranchDashboardNavigationProp;
 }
 
+type RoomFilter = 'all' | 'occupiedBeds' | 'vacantBeds' | 'AVAILABLE' | 'PARTIAL' | 'FULL';
+
+const roomFilterLabels: Record<RoomFilter, string> = {
+  all: 'All rooms',
+  occupiedBeds: 'Rooms with people staying',
+  vacantBeds: 'Rooms with a free bed',
+  AVAILABLE: 'Empty rooms',
+  PARTIAL: 'Rooms with some beds free',
+  FULL: 'Rooms with no beds free',
+};
+
 export default function BranchDashboardScreen({ route, navigation }: BranchDashboardScreenProps) {
   const { branchId } = route.params;
   const theme = useTheme();
   const [activeSegment, setActiveSegment] = useState('overview');
+  const [roomFilter, setRoomFilter] = useState<RoomFilter>('all');
 
   // Fetch branch dashboard data
   const { data: dashboardData, isLoading: dashboardLoading, refetch: refetchDashboard, isRefetching: isRefetchingDashboard } = useQuery({
@@ -49,8 +61,8 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
     occupiedRooms: 0,
     totalBeds: 0,
     occupiedBeds: 0,
+    reservedBeds: 0,
     vacantBeds: 0,
-    occupancyPercentage: 0,
     thisMonthPaid: 0,
     pendingPayments: 0,
     overduePayments: 0,
@@ -95,6 +107,18 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
     refetchRooms();
   };
 
+  const showRooms = (filter: RoomFilter) => {
+    setRoomFilter(filter);
+    setActiveSegment('rooms');
+  };
+
+  const filteredRooms = (rooms || []).filter((room: any) => {
+    if (roomFilter === 'all') return true;
+    if (roomFilter === 'occupiedBeds') return room.occupied > 0;
+    if (roomFilter === 'vacantBeds') return room.vacant > 0;
+    return room.status === roomFilter;
+  });
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.tabContainer}>
@@ -103,7 +127,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
           onValueChange={setActiveSegment}
           buttons={[
             { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
-            { value: 'rooms', label: 'Rooms List', icon: 'door-open' },
+            { value: 'rooms', label: 'View Rooms', icon: 'door-open' },
           ]}
           theme={{ colors: { primary: theme.colors.primary } }}
         />
@@ -123,51 +147,60 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
           <>
             {/* 1. Bed metrics */}
             <Surface style={styles.statsCard} elevation={1}>
-              <Text variant="titleMedium" style={styles.cardTitle}>Bed Capacity</Text>
+              <Text variant="titleMedium" style={styles.cardTitle}>Beds</Text>
+              <Text style={styles.cardHint}>Tap a number to see matching rooms.</Text>
               <View style={styles.bedsStatRow}>
-                <View style={styles.bedsStatCell}>
+                <TouchableOpacity style={styles.bedsStatCell} onPress={() => showRooms('all')} accessibilityRole="button">
                   <Text variant="titleLarge" style={{ fontWeight: '800', color: theme.colors.primary }}>
                     {metrics.totalBeds}
                   </Text>
-                  <Text variant="bodySmall" style={styles.bedsStatLabel}>Total Beds</Text>
-                </View>
-                <View style={styles.bedsStatCell}>
+                  <Text variant="bodySmall" style={styles.bedsStatLabel}>All beds</Text>
+                  <Text style={styles.tapLabel}>View rooms</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.bedsStatCell} onPress={() => showRooms('occupiedBeds')} accessibilityRole="button">
                   <Text variant="titleLarge" style={{ fontWeight: '800', color: (theme.colors as any).success }}>
                     {metrics.occupiedBeds}
                   </Text>
-                  <Text variant="bodySmall" style={styles.bedsStatLabel}>Occupied</Text>
-                </View>
-                <View style={styles.bedsStatCell}>
+                  <Text variant="bodySmall" style={styles.bedsStatLabel}>Beds in use</Text>
+                  <Text style={styles.tapLabel}>View rooms</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.bedsStatCell} onPress={() => showRooms('vacantBeds')} accessibilityRole="button">
                   <Text variant="titleLarge" style={{ fontWeight: '800', color: (theme.colors as any).warning }}>
                     {metrics.vacantBeds}
                   </Text>
-                  <Text variant="bodySmall" style={styles.bedsStatLabel}>Vacant</Text>
-                </View>
+                  <Text variant="bodySmall" style={styles.bedsStatLabel}>Free beds</Text>
+                  <Text style={styles.tapLabel}>View rooms</Text>
+                </TouchableOpacity>
               </View>
             </Surface>
 
             {/* 2. Room States */}
             <Surface style={styles.statsCard} elevation={1}>
-              <Text variant="titleMedium" style={styles.cardTitle}>Rooms Status</Text>
+              <Text variant="titleMedium" style={styles.cardTitle}>Rooms by availability</Text>
+              <Text style={styles.cardHint}>Tap a type to open that list.</Text>
               <View style={styles.roomsStateRow}>
-                <View style={[styles.roomCell, { borderColor: '#E2E8F0', borderRightWidth: 1 }]}>
+                <TouchableOpacity style={styles.roomCell} onPress={() => showRooms('all')} accessibilityRole="button">
+                  <Text variant="titleMedium" style={{ fontWeight: '800', color: theme.colors.primary }}>{metrics.totalRooms}</Text>
+                  <Text variant="bodySmall" style={styles.roomCellLabel}>All</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.roomCell} onPress={() => showRooms('AVAILABLE')} accessibilityRole="button">
                   <Text variant="titleMedium" style={{ fontWeight: '800', color: (theme.colors as any).success }}>
                     {metrics.vacantRooms}
                   </Text>
-                  <Text variant="bodySmall" style={styles.roomCellLabel}>Vacant</Text>
-                </View>
-                <View style={[styles.roomCell, { borderColor: '#E2E8F0', borderRightWidth: 1 }]}>
+                  <Text variant="bodySmall" style={styles.roomCellLabel}>Empty</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.roomCell} onPress={() => showRooms('PARTIAL')} accessibilityRole="button">
                   <Text variant="titleMedium" style={{ fontWeight: '800', color: (theme.colors as any).warning }}>
                     {metrics.partialRooms}
                   </Text>
-                  <Text variant="bodySmall" style={styles.roomCellLabel}>Partial</Text>
-                </View>
-                <View style={styles.roomCell}>
+                  <Text variant="bodySmall" style={styles.roomCellLabel}>Some free</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.roomCell} onPress={() => showRooms('FULL')} accessibilityRole="button">
                   <Text variant="titleMedium" style={{ fontWeight: '800', color: theme.colors.error }}>
                     {metrics.occupiedRooms}
                   </Text>
-                  <Text variant="bodySmall" style={styles.roomCellLabel}>Full</Text>
-                </View>
+                  <Text variant="bodySmall" style={styles.roomCellLabel}>No beds</Text>
+                </TouchableOpacity>
               </View>
             </Surface>
 
@@ -176,15 +209,15 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
               <Text variant="titleMedium" style={styles.cardTitle}>Branch Collections</Text>
               <View style={styles.paymentsGrid}>
                 <View style={styles.paymentCell}>
-                  <Text style={[styles.paymentLabel, { color: (theme.colors as any).success }]}>Paid</Text>
+                  <Text style={[styles.paymentLabel, { color: (theme.colors as any).success }]}>Received</Text>
                   <Text variant="titleMedium" style={{ fontWeight: '700' }}>₹{metrics.thisMonthPaid}</Text>
                 </View>
                 <View style={[styles.paymentCell, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#E2E8F0' }]}>
-                  <Text style={[styles.paymentLabel, { color: (theme.colors as any).warning }]}>Pending</Text>
+                  <Text style={[styles.paymentLabel, { color: (theme.colors as any).warning }]}>Still due</Text>
                   <Text variant="titleMedium" style={{ fontWeight: '700' }}>₹{metrics.pendingPayments}</Text>
                 </View>
                 <View style={styles.paymentCell}>
-                  <Text style={[styles.paymentLabel, { color: theme.colors.error }]}>Overdue</Text>
+                  <Text style={[styles.paymentLabel, { color: theme.colors.error }]}>Late</Text>
                   <Text variant="titleMedium" style={{ fontWeight: '700' }}>₹{metrics.overduePayments}</Text>
                 </View>
               </View>
@@ -192,6 +225,9 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
 
             {/* 4. Quick Actions */}
             <Text variant="titleMedium" style={styles.sectionTitle}>Branch Actions</Text>
+            <Button mode="contained" icon="bed" onPress={() => navigation.navigate('BookingForm', { branchId })} style={[styles.actionBtn, { marginBottom: 12 }]} contentStyle={{ paddingVertical: 7 }}>
+              Book a bed for someone
+            </Button>
             <View style={styles.actionsGrid}>
               <Button
                 mode="outlined"
@@ -242,7 +278,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
                 style={styles.actionBtn}
                 contentStyle={{ paddingVertical: 4 }}
               >
-                Payments
+                Rent Payments
               </Button>
             </View>
 
@@ -259,10 +295,31 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
         ) : (
           /* Rooms List Segment */
           <View>
+            <View style={styles.resultsHeader}>
+              <View style={{ flex: 1 }}>
+                <Text variant="titleLarge" style={styles.resultsTitle}>{roomFilterLabels[roomFilter]}</Text>
+                <Text style={styles.resultsCount}>{filteredRooms.length} {filteredRooms.length === 1 ? 'room' : 'rooms'} found</Text>
+              </View>
+              {metrics.reservedBeds > 0 && (
+                <TouchableOpacity style={styles.reservedNotice} onPress={() => navigation.navigate('BookingList')} accessibilityRole="button">
+                  <Icon name="bed" size={21} color="#7C3AED" />
+                  <Text style={styles.reservedNoticeText}>{metrics.reservedBeds} {metrics.reservedBeds === 1 ? 'bed is' : 'beds are'} reserved · View bookings</Text>
+                  <Icon name="chevron-right" size={21} color="#7C3AED" />
+                </TouchableOpacity>
+              )}
+              {roomFilter !== 'all' && <Button mode="text" onPress={() => setRoomFilter('all')}>Show all</Button>}
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+              {(['all', 'AVAILABLE', 'PARTIAL', 'FULL'] as RoomFilter[]).map((filter) => (
+                <Button key={filter} mode={roomFilter === filter ? 'contained' : 'outlined'} compact={false} onPress={() => setRoomFilter(filter)} style={styles.filterButton}>
+                  {filter === 'all' ? 'All' : filter === 'AVAILABLE' ? 'Empty' : filter === 'PARTIAL' ? 'Some free' : 'No beds free'}
+                </Button>
+              ))}
+            </ScrollView>
             {roomsLoading ? (
               <Text>Loading Rooms...</Text>
-            ) : rooms && rooms.length > 0 ? (
-              rooms.map((room: any) => {
+            ) : filteredRooms.length > 0 ? (
+              filteredRooms.map((room: any) => {
                 const statusColor = occupancyColors[room.status as keyof typeof occupancyColors] || '#64748B';
                 return (
                   <Card
@@ -288,7 +345,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
                           ₹{room.monthlyRent}
                         </Text>
                         <Text variant="bodySmall" style={{ color: '#64748B' }}>
-                          🛏️ {room.occupied} / {room.capacity} occupied
+                          🛏️ {room.occupied} in use · {room.reserved || 0} reserved · {room.vacant} free
                         </Text>
                       </View>
                     </Card.Content>
@@ -298,7 +355,9 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
             ) : (
               <View style={styles.emptyRooms}>
                 <Icon name="door-closed" size={48} color="#94A3B8" />
-                <Text style={{ marginTop: 8, color: '#64748B', fontWeight: '600' }}>No rooms in this branch.</Text>
+                <Text style={{ marginTop: 8, color: '#64748B', fontWeight: '600' }}>{rooms?.length ? 'No rooms match this filter.' : 'No rooms in this branch.'}</Text>
+                {!!rooms?.length && <Button mode="outlined" style={{ marginTop: 12 }} onPress={() => setRoomFilter('all')}>Show all rooms</Button>}
+                {!rooms?.length && (
                 <Button
                   mode="contained"
                   style={{ marginTop: 12 }}
@@ -306,6 +365,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
                 >
                   Create First Room
                 </Button>
+                )}
               </View>
             )}
           </View>
@@ -334,8 +394,9 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontWeight: '700',
     color: '#334155',
-    marginBottom: 12,
+    marginBottom: 2,
   },
+  cardHint: { color: '#64748B', fontSize: 13, marginBottom: 14 },
   bedsStatRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -343,6 +404,10 @@ const styles = StyleSheet.create({
   bedsStatCell: {
     flex: 1,
     alignItems: 'center',
+    minHeight: 82,
+    justifyContent: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 4,
   },
   bedsStatLabel: {
     color: '#64748B',
@@ -356,12 +421,24 @@ const styles = StyleSheet.create({
   roomCell: {
     flex: 1,
     alignItems: 'center',
+    minHeight: 68,
+    justifyContent: 'center',
+    paddingHorizontal: 3,
   },
   roomCellLabel: {
     color: '#64748B',
     marginTop: 4,
     fontWeight: '600',
+    textAlign: 'center',
   },
+  tapLabel: { color: '#4F46E5', fontSize: 11, fontWeight: '700', marginTop: 5 },
+  reservedNotice: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F3E8FF', padding: 12, borderRadius: 12, marginTop: 12 },
+  reservedNoticeText: { flex: 1, color: '#6B21A8', fontSize: 13, fontWeight: '800' },
+  resultsHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  resultsTitle: { color: '#0F172A', fontWeight: '800' },
+  resultsCount: { color: '#64748B', fontSize: 14, marginTop: 3 },
+  filterRow: { gap: 8, paddingBottom: 16 },
+  filterButton: { borderRadius: 12 },
   paymentsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -73,13 +73,17 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
       contentContainerStyle={styles.listContainer}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} colors={[theme.colors.primary]} />}
     >
+      <Surface style={styles.infoBox} elevation={0}>
+        <Text style={styles.infoTitle}>Important reminders</Text>
+        <Text style={styles.infoText}>Tap a reminder to open the related person or rent payment.</Text>
+      </Surface>
       {notifications.length > 0 && (
         <View style={styles.headerRow}>
           <Text variant="bodySmall" style={{ color: '#64748B' }}>
-            {data?.unreadCount || 0} unread
+            {data?.unreadCount || 0} new reminders
           </Text>
           <Button mode="text" compact onPress={handleMarkAllRead}>
-            Mark all as read
+            Mark all seen
           </Button>
         </View>
       )}
@@ -87,7 +91,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
       {notifications.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Icon name="bell-check-outline" size={48} color="#94A3B8" />
-          <Text style={{ marginTop: 8, color: '#64748B', fontWeight: '500' }}>You're all caught up.</Text>
+          <Text style={{ marginTop: 8, color: '#64748B', fontWeight: '600' }}>No reminders need your attention.</Text>
         </View>
       ) : (
         notifications.map((item: any) => {
@@ -117,6 +121,9 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   listContainer: { padding: 16 },
+  infoBox: { backgroundColor: '#EEF2FF', borderRadius: 16, padding: 16, marginBottom: 14 },
+  infoTitle: { color: '#1E1B4B', fontSize: 18, fontWeight: '800' },
+  infoText: { color: '#475569', fontSize: 14, lineHeight: 20, marginTop: 4 },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -128,8 +135,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 16,
+    padding: 16,
+    minHeight: 88,
     marginBottom: 10,
     gap: 12,
   },
@@ -138,19 +146,20 @@ const styles = StyleSheet.create({
     borderLeftColor: '#4F46E5',
   },
   iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
   cardTitle: {
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: 16,
     color: '#0F172A',
   },
   cardMessage: {
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 20,
     color: '#475569',
     marginTop: 2,
   },

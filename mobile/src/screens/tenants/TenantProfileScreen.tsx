@@ -43,7 +43,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
 
   const handleVacate = () => {
     showConfirm(
-      'Are you sure you want to mark this tenant as Vacated? This will release their bed and make it immediately available.',
+      'Has this person moved out? Their bed will become available for someone else.',
       async () => {
         setIsProcessing(true);
         try {
@@ -53,10 +53,10 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
             roomId: tenant?.roomId,
             tenantId,
           });
-          showAlert('Tenant marked as Vacated');
+          showAlert('The resident has been marked as moved out.');
         } catch (err: any) {
           console.error(err);
-          showAlert(err.response?.data?.error || 'Failed to vacate tenant');
+          showAlert(err.response?.data?.error || 'Could not mark this resident as moved out.');
         } finally {
           setIsProcessing(false);
         }
@@ -67,7 +67,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
 
   const handleDelete = () => {
     showConfirm(
-      'Are you sure you want to delete this tenant record permanently? All payments history will be deleted.',
+      "Delete this resident's record permanently? Their rent payment history will also be deleted.",
       async () => {
         setIsProcessing(true);
         try {
@@ -77,16 +77,16 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
             roomId: tenant?.roomId,
             tenantId,
           });
-          showAlert('Tenant record deleted successfully');
+          showAlert("The resident's record was deleted.");
           navigation.navigate('Main');
         } catch (err: any) {
           console.error(err);
-          showAlert(err.response?.data?.error || 'Failed to delete tenant');
+          showAlert(err.response?.data?.error || "Could not delete this resident's record.");
         } finally {
           setIsProcessing(false);
         }
       },
-      { title: 'Delete Tenant', confirmText: 'Delete', destructive: true }
+      { title: 'Delete resident record', confirmText: 'Delete', destructive: true }
     );
   };
 
@@ -214,7 +214,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
   if (isLoading) {
     return (
       <View style={styles.center}>
-        <Text>Loading profile...</Text>
+        <Text>Loading resident details…</Text>
       </View>
     );
   }
@@ -256,7 +256,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
               ))}
             </View>
             <TextInput
-              label="Custom Days"
+              label="Number of days"
               value={daysInput}
               onChangeText={setDaysInput}
               keyboardType="numeric"
@@ -264,7 +264,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
               style={{ marginBottom: 12 }}
             />
             <TextInput
-              label="Discount Amount (₹)"
+              label="Amount reduced (₹)"
               value={discountInput}
               onChangeText={setDiscountInput}
               keyboardType="numeric"
@@ -281,13 +281,13 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
               </View>
               {parsedDiscount > 0 && (
                 <View style={styles.invoicePreviewRow}>
-                  <Text variant="bodySmall" style={{ color: theme.colors.error }}>Discount</Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.error }}>Amount reduced</Text>
                   <Text variant="bodySmall" style={{ color: theme.colors.error }}>-₹{parsedDiscount}</Text>
                 </View>
               )}
               <Divider style={{ marginVertical: 6 }} />
               <View style={styles.invoicePreviewRow}>
-                <Text style={{ fontWeight: '800', color: '#0F172A' }}>Total Due</Text>
+                <Text style={{ fontWeight: '800', color: '#0F172A' }}>Amount to collect</Text>
                 <Text style={{ fontWeight: '800', color: theme.colors.primary }}>₹{previewFinal}</Text>
               </View>
             </Surface>
@@ -320,12 +320,12 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
                 ]}
               >
                 <Text style={{ fontSize: 10, fontWeight: '800', color: tenant.status === 'ACTIVE' ? '#065F46' : '#B91C1C' }}>
-                  {tenant.status}
+                  {tenant.status === 'ACTIVE' ? 'Staying now' : 'Moved out'}
                 </Text>
               </View>
             </View>
             <Text variant="bodySmall" style={{ color: '#64748B', marginTop: 6, fontWeight: '500' }}>
-              Joined: {new Date(tenant.joiningDate).toLocaleDateString()}
+              Moved in: {new Date(tenant.joiningDate).toLocaleDateString()}
             </Text>
           </View>
         </View>
@@ -335,11 +335,11 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
         {/* Room Alloc Details */}
         <View style={styles.roomSpecs}>
           <View style={styles.specCell}>
-            <Text variant="bodySmall" style={styles.specLabel}>Branch</Text>
+            <Text variant="bodySmall" style={styles.specLabel}>Hostel branch</Text>
             <Text variant="titleMedium" style={styles.specVal}>{tenant.room.branch.name}</Text>
           </View>
           <View style={[styles.specCell, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#E2E8F0' }]}>
-            <Text variant="bodySmall" style={styles.specLabel}>Room Number</Text>
+            <Text variant="bodySmall" style={styles.specLabel}>Room</Text>
             <Text variant="titleMedium" style={styles.specVal}>Room {tenant.room.roomNumber}</Text>
           </View>
           <View style={styles.specCell}>
@@ -350,7 +350,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
       </Surface>
 
       {/* 2. Personal & Guardian Details */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Personal & Guardian Details</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>Contact and family information</Text>
       <Card style={styles.infoCard}>
         <Card.Content>
           <View style={styles.detailsGrid}>
@@ -369,11 +369,11 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
               </TouchableOpacity>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Occupation</Text>
+              <Text style={styles.detailLabel}>Work or studies</Text>
               <Text style={styles.detailVal}>{tenant.occupation}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Work/Study Location</Text>
+              <Text style={styles.detailLabel}>Work or college location</Text>
               <Text style={styles.detailVal}>{tenant.workLocation}</Text>
             </View>
             <View style={styles.detailRow}>
@@ -400,7 +400,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
       </Card>
 
       {/* 3. Uploaded S3 Documents */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Uploaded Documents</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>Identity documents</Text>
       <Card style={styles.infoCard}>
         <Card.Content>
           <Text variant="bodySmall" style={{ color: '#64748B', marginBottom: 10 }}>Tap image to expand document preview</Text>
@@ -428,10 +428,10 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
 
       {/* 4. Payment History */}
       <View style={styles.paymentsSectionHeader}>
-        <Text variant="titleMedium" style={[styles.sectionTitle, { marginHorizontal: 0 }]}>Payments History</Text>
+        <Text variant="titleMedium" style={[styles.sectionTitle, { marginHorizontal: 0 }]}>Rent payment history</Text>
         {tenant.status === 'ACTIVE' && (
           <Button mode="text" icon="plus" compact onPress={openAddRentDialog}>
-            Add Rent Invoice
+            Add a rent bill
           </Button>
         )}
       </View>
@@ -470,7 +470,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
                         },
                       ]}
                     >
-                      {pay.status}
+                      {pay.status === 'PAID' ? 'Received' : pay.status === 'OVERDUE' ? 'Late' : 'Due'}
                     </Text>
                     {pay.paidDate && (
                       <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
@@ -504,7 +504,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
             ))
           ) : (
             <View style={styles.emptyPayments}>
-              <Text style={{ color: '#64748B' }}>No payment logs recorded yet.</Text>
+              <Text style={{ color: '#64748B' }}>No rent payments recorded yet.</Text>
             </View>
           )}
         </Card.Content>
@@ -519,7 +519,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
             style={styles.actionBtn}
             onPress={() => navigation.navigate('MoveTenant', { tenantId: tenant.id, branchId: tenant.room.branchId })}
           >
-            Move Room
+            Move to another room
           </Button>
           <Button
             mode="outlined"
@@ -529,7 +529,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
             onPress={handleVacate}
             disabled={isProcessing}
           >
-            Vacate
+            Mark as moved out
           </Button>
         </View>
       )}
@@ -542,7 +542,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
         onPress={handleDelete}
         disabled={isProcessing}
       >
-        Delete Tenant Profile
+        Delete this resident's record
       </Button>
     </ScrollView>
   );
@@ -706,14 +706,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionButtons: {
-    flexDirection: 'row',
     marginHorizontal: 16,
     gap: 12,
     marginTop: 8,
   },
   actionBtn: {
-    flex: 1,
-    borderRadius: 8,
+    borderRadius: 12,
+    minHeight: 50,
+    justifyContent: 'center',
   },
   modalBg: {
     flex: 1,

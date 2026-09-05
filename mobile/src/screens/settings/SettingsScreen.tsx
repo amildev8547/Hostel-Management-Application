@@ -84,19 +84,19 @@ export default function SettingsScreen() {
           <Text variant="titleLarge" style={styles.profileName}>{user?.name || 'Hostel Owner'}</Text>
           <Text variant="bodyMedium" style={{ color: '#64748B' }}>{user?.email}</Text>
           <Text variant="labelSmall" style={[styles.roleBadge, { backgroundColor: '#EEF2FF', color: theme.colors.primary }]}>
-            {user?.role}
+            Hostel owner
           </Text>
         </View>
       </Surface>
 
       {/* 2. Operations Prefs */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>System Preferences</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>Automatic tasks and reminders</Text>
       <Card style={styles.settingsCard}>
         <Card.Content style={{ padding: 0 }}>
           <List.Item
-            title="Auto-Generate Monthly Rent"
+            title="Create monthly rent bills automatically"
             titleNumberOfLines={2}
-            description="Generate rent invoices on the 1st of each month"
+            description="On the first day of every month, prepare rent bills for everyone"
             left={(props) => <List.Icon {...props} icon="calendar-check" />}
             right={() => (
               <Switch
@@ -108,15 +108,15 @@ export default function SettingsScreen() {
           />
           <Divider />
           <List.Item
-            title="System Currency"
+            title="Money used in the app"
             description="Indian Rupee (₹)"
             left={(props) => <List.Icon {...props} icon="currency-inr" />}
           />
           <Divider />
           <List.Item
-            title="Notification Alerts"
+            title="Show reminder alerts"
             titleNumberOfLines={2}
-            description="Show rent due, overdue & vacating alerts in the notification bell"
+            description="Remind me about rent due, late payments, and people leaving"
             left={(props) => <List.Icon {...props} icon="bell-ring-outline" />}
             right={() => (
               <Switch
@@ -129,9 +129,10 @@ export default function SettingsScreen() {
         </Card.Content>
       </Card>
 
-      <Text variant="titleMedium" style={styles.sectionTitle}>Manual Payment Details</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>Where residents should pay</Text>
       <Card style={styles.settingsCard}>
         <Card.Content>
+          <Text style={styles.sectionHelp}>These details are shown when you send payment instructions.</Text>
           <TextInput
             label="UPI ID"
             value={upiId}
@@ -142,7 +143,7 @@ export default function SettingsScreen() {
             style={styles.input}
           />
           <TextInput
-            label="Receiver Name"
+            label="Name shown to the payer"
             value={receiverName}
             onChangeText={setReceiverName}
             mode="outlined"
@@ -150,7 +151,7 @@ export default function SettingsScreen() {
             style={styles.input}
           />
           <TextInput
-            label="WhatsApp Number for Screenshots"
+            label="WhatsApp number for payment proof"
             value={paymentWhatsapp}
             onChangeText={setPaymentWhatsapp}
             mode="outlined"
@@ -166,24 +167,24 @@ export default function SettingsScreen() {
             disabled={updateSettingMutation.isPending}
             style={styles.saveButton}
           >
-            Save Payment Details
+            Save payment information
           </Button>
         </Card.Content>
       </Card>
 
       {/* 3. App Details */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>About App</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>About this app</Text>
       <Card style={styles.settingsCard}>
         <Card.Content style={{ padding: 0 }}>
           <List.Item
             title="Version"
-            description="HostelHub V1.0.0 (MongoDB & Cloudinary)"
+            description="HostelHub 1.0.0"
             left={(props) => <List.Icon {...props} icon="information-outline" />}
           />
           <Divider />
           <List.Item
-            title="Single Owner Mode"
-            description="Login is disabled for this installation"
+            title="Made for one hostel owner"
+            description="This installation opens directly for the owner"
             left={(props) => <List.Icon {...props} icon="cellphone-cog" />}
           />
         </Card.Content>
@@ -242,8 +243,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: '#FFFFFF',
   },
+  sectionHelp: { color: '#64748B', fontSize: 14, lineHeight: 20, marginBottom: 14 },
   saveButton: {
-    borderRadius: 8,
+    borderRadius: 12,
     marginTop: 4,
+    paddingVertical: 8,
   },
 });

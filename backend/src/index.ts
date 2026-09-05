@@ -14,6 +14,7 @@ import paymentRoutes from './routes/paymentRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import settingRoutes from './routes/settingRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
+import bookingRoutes from './routes/bookingRoutes';
 import publicRoutes from './routes/publicRoutes';
 import prisma from './config/db';
 
@@ -42,6 +43,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/settings', settingRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/bookings', bookingRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

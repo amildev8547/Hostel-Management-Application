@@ -57,7 +57,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
   if (isLoading) {
     return (
       <View style={styles.center}>
-        <Text>Loading Room Details...</Text>
+        <Text>Loading room details…</Text>
       </View>
     );
   }
@@ -82,7 +82,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
           </View>
           <View style={[styles.badge, { backgroundColor: statusColor }]}>
             <Text style={styles.badgeText}>
-              {occupancyLabels[room.status as keyof typeof occupancyLabels]}
+              {room.status === 'AVAILABLE' ? 'Empty' : room.status === 'PARTIAL' ? 'Some beds free' : room.status === 'FULL' ? 'No beds free' : 'Not usable'}
             </Text>
           </View>
         </View>
@@ -91,12 +91,12 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
 
         <View style={styles.roomSpecs}>
           <View style={styles.specCell}>
-            <Text variant="bodySmall" style={styles.specLabel}>Sharing Type</Text>
-            <Text variant="titleMedium" style={styles.specVal}>{room.roomType}</Text>
+            <Text variant="bodySmall" style={styles.specLabel}>Room type</Text>
+            <Text variant="titleMedium" style={styles.specVal}>{String(room.roomType).replace('Share', 'people')}</Text>
           </View>
           <View style={styles.specCell}>
-            <Text variant="bodySmall" style={styles.specLabel}>Beds Occupied</Text>
-            <Text variant="titleMedium" style={styles.specVal}>{room.occupied} / {room.capacity}</Text>
+            <Text variant="bodySmall" style={styles.specLabel}>Beds in use</Text>
+            <Text variant="titleMedium" style={styles.specVal}>{room.occupied} of {room.capacity}</Text>
           </View>
           <View style={styles.specCell}>
             <Text variant="bodySmall" style={styles.specLabel}>Monthly Rent</Text>
@@ -105,8 +105,19 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
         </View>
       </Surface>
 
+      {room.reserved > 0 && (
+        <TouchableOpacity style={styles.reservedBox} onPress={() => navigation.navigate('BookingList')} accessibilityRole="button">
+          <Icon name="bed" size={24} color="#7C3AED" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.reservedTitle}>{room.reserved} {room.reserved === 1 ? 'bed is' : 'beds are'} reserved</Text>
+            <Text style={styles.reservedHelp}>Tap to view or cancel bookings</Text>
+          </View>
+          <Icon name="chevron-right" size={24} color="#7C3AED" />
+        </TouchableOpacity>
+      )}
+
       {/* 2. Active Tenants List */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Current Tenants</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>People staying in this room</Text>
       <Card style={styles.listCard}>
         <Card.Content style={{ padding: 8 }}>
           {room.tenants && room.tenants.length > 0 ? (
@@ -129,14 +140,14 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
           ) : (
             <View style={styles.emptyContainer}>
               <Icon name="account-multiple-remove-outline" size={40} color="#94A3B8" />
-              <Text style={{ marginTop: 8, color: '#64748B', fontWeight: '500' }}>No active tenants in this room</Text>
+              <Text style={{ marginTop: 8, color: '#64748B', fontWeight: '500' }}>Nobody is staying in this room</Text>
             </View>
           )}
         </Card.Content>
       </Card>
 
       {/* 3. Payment History */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Recent Payments</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>Recent rent payments</Text>
       <Card style={styles.listCard}>
         <Card.Content style={{ padding: 8 }}>
           {room.paymentHistory && room.paymentHistory.length > 0 ? (
@@ -149,7 +160,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
                       ₹{pay.amount} ({pay.paymentType})
                     </Text>
                     <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                      Due: {new Date(pay.dueDate).toLocaleDateString()}
+                      Pay by: {new Date(pay.dueDate).toLocaleDateString()}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
@@ -166,7 +177,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
                         },
                       ]}
                     >
-                      {pay.status}
+                      {pay.status === 'PAID' ? 'Received' : pay.status === 'OVERDUE' ? 'Late' : 'Due'}
                     </Text>
                     {pay.paidDate && (
                       <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
@@ -180,7 +191,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
           ) : (
             <View style={styles.emptyContainer}>
               <Icon name="cash-register" size={40} color="#94A3B8" />
-              <Text style={{ marginTop: 8, color: '#64748B', fontWeight: '500' }}>No payments logged yet</Text>
+              <Text style={{ marginTop: 8, color: '#64748B', fontWeight: '500' }}>No rent payments recorded yet</Text>
             </View>
           )}
         </Card.Content>
@@ -274,6 +285,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: 8,
   },
+  reservedBox: { flexDirection: 'row', alignItems: 'center', gap: 11, marginHorizontal: 16, marginBottom: 16, padding: 15, borderRadius: 14, backgroundColor: '#F3E8FF' },
+  reservedTitle: { color: '#6B21A8', fontSize: 15, fontWeight: '800' },
+  reservedHelp: { color: '#7E22CE', fontSize: 12, marginTop: 3 },
   listCard: {
     marginHorizontal: 16,
     backgroundColor: '#FFFFFF',

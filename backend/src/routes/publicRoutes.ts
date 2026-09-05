@@ -20,9 +20,16 @@ function settingValue(settings: { key: string; value: string }[] | undefined, ke
   return settings?.find((setting) => setting.key === key)?.value?.trim() || '';
 }
 
-// 1. GET /apply/:branchId - Renders the public admission form
-router.get('/apply/:branchId', async (req: Request, res: Response) => {
-  const { branchId } = req.params;
+// Public admission form. A secure booking link locks the reserved branch, room, bed and basic details.
+router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res: Response) => {
+  const booking = req.params.bookingToken
+    ? await prisma.booking.findUnique({ where: { secureToken: req.params.bookingToken }, include: { room: true, branch: true } })
+    : null;
+  if (req.params.bookingToken && !booking) return res.status(404).send('<h1>This booking link is not valid</h1>');
+  if (booking && booking.status !== 'RESERVED') {
+    return res.status(409).send(`<h1>${booking.status === 'FORM_SUBMITTED' ? 'Application already submitted' : 'This booking is already completed'}</h1>`);
+  }
+  const branchId = booking?.branchId || req.params.branchId;
 
   try {
     const branch = await prisma.branch.findUnique({
@@ -208,20 +215,22 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
           <form id="admissionForm">
             <div id="messagePanel" class="message-panel" role="status" aria-live="polite"></div>
 
+            ${booking ? `<div class="message-panel info" style="display:block"><strong>Your reserved place</strong><br>${escapeHtml(booking.branch.name)} · Room ${escapeHtml(booking.room.roomNumber)} · Bed ${escapeHtml(booking.bedNumber)}<br>These booking details are fixed. Complete the remaining information below.</div>` : ''}
+
             <h2 class="section-title">Personal Details</h2>
             <div class="form-group">
               <label for="name">Full Name *</label>
-              <input type="text" id="name" required placeholder="John Doe">
+              <input type="text" id="name" required placeholder="John Doe" value="${escapeHtml(booking?.name)}" ${booking ? 'readonly' : ''}>
             </div>
             <div class="form-row">
               <div class="form-group">
                 <label for="phone">Phone Number *</label>
-                <input type="tel" id="phone" required inputmode="numeric" minlength="10" placeholder="9876543210">
+                <input type="tel" id="phone" required inputmode="numeric" minlength="10" placeholder="9876543210" value="${escapeHtml(booking?.phone)}" ${booking ? 'readonly' : ''}>
                 <span class="help-text">Enter a 10 digit mobile number.</span>
               </div>
               <div class="form-group">
                 <label for="whatsappNumber">WhatsApp Number *</label>
-                <input type="tel" id="whatsappNumber" required inputmode="numeric" minlength="10" placeholder="9876543210">
+                <input type="tel" id="whatsappNumber" required inputmode="numeric" minlength="10" placeholder="9876543210" value="${escapeHtml(booking?.phone)}">
                 <span class="help-text">Enter the WhatsApp number without country code.</span>
               </div>
             </div>
@@ -263,17 +272,17 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
             <div class="form-row">
               <div class="form-group">
                 <label for="preferredRoomType">Preferred Room Type *</label>
-                <select id="preferredRoomType" required>
-                  <option value="2 Share">2 Sharing</option>
-                  <option value="3 Share">3 Sharing</option>
-                  <option value="4 Share">4 Sharing</option>
-                  <option value="5 Share">5 Sharing</option>
-                  <option value="Custom">Custom Room</option>
+                <select id="preferredRoomType" required ${booking ? 'disabled' : ''}>
+                  <option value="2 Share" ${booking?.room.roomType === '2 Share' ? 'selected' : ''}>2 Sharing</option>
+                  <option value="3 Share" ${booking?.room.roomType === '3 Share' ? 'selected' : ''}>3 Sharing</option>
+                  <option value="4 Share" ${booking?.room.roomType === '4 Share' ? 'selected' : ''}>4 Sharing</option>
+                  <option value="5 Share" ${booking?.room.roomType === '5 Share' ? 'selected' : ''}>5 Sharing</option>
+                  <option value="Custom" ${booking?.room.roomType === 'Custom' ? 'selected' : ''}>Custom Room</option>
                 </select>
               </div>
               <div class="form-group">
                 <label for="joiningDate">Expected Joining Date *</label>
-                <input type="date" id="joiningDate" required>
+                <input type="date" id="joiningDate" required value="${booking ? booking.expectedJoiningDate.toISOString().split('T')[0] : ''}" ${booking ? 'readonly' : ''}>
               </div>
             </div>
             <div class="form-group">
@@ -311,7 +320,7 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
 
             <div class="form-group">
               <label for="notes">Additional Notes</label>
-              <textarea id="notes" rows="2" placeholder="Any special requests or instructions"></textarea>
+              <textarea id="notes" rows="2" placeholder="Any special requests or instructions">${escapeHtml(booking?.notes)}</textarea>
             </div>
 
             <div class="form-group" style="background-color: #F9FAFB; padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
@@ -528,6 +537,7 @@ router.get('/apply/:branchId', async (req: Request, res: Response) => {
                 aadhaarBack: aadhaarBackBase64,
                 notes: document.getElementById('notes').value || undefined,
                 branchId: ${JSON.stringify(branchId)},
+                bookingToken: ${JSON.stringify(booking?.secureToken || undefined)},
                 amount: roomFeeMap[preferredRoomTypeInput.value] ?? cheapestOverallFee // Display only; server recomputes the real fee
               };
 

@@ -125,8 +125,9 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         <Surface style={styles.card} elevation={1}>
           <Text variant="titleLarge" style={styles.title}>
-            {roomId ? `Edit Room` : 'Add New Room'}
+            {roomId ? 'Change room details' : 'Add a room'}
           </Text>
+          <Text style={styles.helpText}>Fill in the room, number of beds, and rent. Fields marked * are required.</Text>
 
           <Controller
             control={control}
@@ -150,7 +151,7 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
             name="floor"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                label="Floor / Level *"
+                label="Floor *"
                 value={value}
                 onBlur={onBlur}
                 onChangeText={onChange}
@@ -164,17 +165,17 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
           {errors.floor && <HelperText type="error">{errors.floor.message}</HelperText>}
 
           {/* Sharing Select Segment */}
-          <Text variant="labelMedium" style={styles.sectionLabel}>Sharing Type *</Text>
+          <Text variant="labelMedium" style={styles.sectionLabel}>How many people can share this room? *</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
             <SegmentedButtons
               value={roomTypeVal}
               onValueChange={handleRoomTypeChange}
               buttons={[
-                { value: '2 Share', label: '2 Share' },
-                { value: '3 Share', label: '3 Share' },
-                { value: '4 Share', label: '4 Share' },
-                { value: '5 Share', label: '5 Share' },
-                { value: 'Custom', label: 'Custom' },
+                { value: '2 Share', label: '2 people' },
+                { value: '3 Share', label: '3 people' },
+                { value: '4 Share', label: '4 people' },
+                { value: '5 Share', label: '5 people' },
+                { value: 'Custom', label: 'Other' },
               ]}
               style={{ width: 450 }}
             />
@@ -186,7 +187,7 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
               name="capacity"
               render={({ field: { onChange, onBlur, value } }) => (
                 <TextInput
-                  label="Bed Capacity *"
+                  label="Number of beds *"
                   value={String(value)}
                   onBlur={onBlur}
                   onChangeText={(text) => onChange(Number(text) || 1)}
@@ -242,8 +243,8 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
               value={statusVal}
               onValueChange={setStatusVal}
               buttons={[
-                { value: 'AVAILABLE', label: 'Available' },
-                { value: 'MAINTENANCE', label: 'Maintenance' },
+                { value: 'AVAILABLE', label: 'Ready to use' },
+                { value: 'MAINTENANCE', label: 'Not usable' },
               ]}
             />
           </View>
@@ -255,7 +256,7 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
             disabled={isSubmitting}
             style={styles.submitBtn}
           >
-            Save Room Details
+            {roomId ? 'Save changes' : 'Add this room'}
           </Button>
         </Surface>
       </ScrollView>
@@ -278,9 +279,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: '800',
-    marginBottom: 20,
+    marginBottom: 6,
     color: '#0F172A',
   },
+  helpText: { color: '#64748B', fontSize: 14, lineHeight: 20, marginBottom: 20 },
   input: {
     marginBottom: 8,
     backgroundColor: '#FFFFFF',
@@ -292,8 +294,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   submitBtn: {
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 9,
+    borderRadius: 12,
     marginTop: 10,
   },
   center: {

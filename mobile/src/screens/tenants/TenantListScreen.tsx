@@ -70,7 +70,7 @@ export default function TenantListScreen({ navigation }: TenantListScreenProps) 
                   },
                 ]}
               >
-                {item.status}
+                {item.status === 'ACTIVE' ? 'Staying' : 'Moved out'}
               </Text>
             </View>
             <Icon name="chevron-right" size={24} color="#94A3B8" style={{ marginTop: 8 }} />
@@ -82,8 +82,12 @@ export default function TenantListScreen({ navigation }: TenantListScreenProps) 
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={styles.introBox}>
+        <Text style={styles.introTitle}>{statusFilter === 'ACTIVE' ? 'People staying now' : 'People who left'}</Text>
+        <Text style={styles.introText}>Tap a person to see their room, contact details, documents, and rent.</Text>
+      </View>
       <Searchbar
-        placeholder="Search tenants..."
+        placeholder="Search by name or phone…"
         onChangeText={setSearchQuery}
         value={searchQuery}
         style={styles.searchBar}
@@ -95,15 +99,15 @@ export default function TenantListScreen({ navigation }: TenantListScreenProps) 
           value={statusFilter}
           onValueChange={setStatusFilter}
           buttons={[
-            { value: 'ACTIVE', label: 'Active' },
-            { value: 'VACATED', label: 'Vacated' },
+            { value: 'ACTIVE', label: 'Staying now' },
+            { value: 'VACATED', label: 'Moved out' },
           ]}
         />
       </View>
 
       {isLoading ? (
         <View style={styles.center}>
-          <Text>Loading tenants...</Text>
+          <Text>Loading people…</Text>
         </View>
       ) : (
         <FlatList
@@ -117,8 +121,8 @@ export default function TenantListScreen({ navigation }: TenantListScreenProps) 
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Icon name="account-search-outline" size={64} color="#94A3B8" />
-              <Text variant="titleMedium" style={styles.emptyTitle}>No Tenants Found</Text>
-              <Text variant="bodyMedium" style={styles.emptyDesc}>Try adjusting search queries or status filters.</Text>
+              <Text variant="titleMedium" style={styles.emptyTitle}>No people found</Text>
+              <Text variant="bodyMedium" style={styles.emptyDesc}>Try another name or select a different option above.</Text>
             </View>
           }
         />
@@ -131,9 +135,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  introBox: { marginHorizontal: 16, marginTop: 16, padding: 16, backgroundColor: '#EEF2FF', borderRadius: 16 },
+  introTitle: { color: '#1E1B4B', fontSize: 18, fontWeight: '800' },
+  introText: { color: '#475569', fontSize: 14, lineHeight: 20, marginTop: 4 },
   searchBar: {
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 12,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
   },
@@ -154,7 +161,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 14,
   },
   leftSection: {
     flexDirection: 'row',

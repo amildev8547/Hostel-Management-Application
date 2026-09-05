@@ -331,18 +331,21 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
       </View>
 
       <View style={styles.headerGrid}>
-        <Surface style={styles.headerCell} elevation={1}>
-          <Text style={[styles.headerCellLabel, { color: (theme.colors as any).success }]}>Collected</Text>
+        <TouchableOpacity style={styles.headerCell} onPress={() => setActiveSegment('paid')} accessibilityRole="button">
+          <Text style={[styles.headerCellLabel, { color: (theme.colors as any).success }]}>Rent received</Text>
           <Text variant="titleMedium" style={styles.headerCellVal}>₹{collectedThisMonth}</Text>
-        </Surface>
-        <Surface style={styles.headerCell} elevation={1}>
-          <Text style={[styles.headerCellLabel, { color: (theme.colors as any).warning }]}>Pending</Text>
+          <Text style={styles.tapSummary}>Tap to view</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerCell} onPress={() => setActiveSegment('pending')} accessibilityRole="button">
+          <Text style={[styles.headerCellLabel, { color: (theme.colors as any).warning }]}>Rent due</Text>
           <Text variant="titleMedium" style={styles.headerCellVal}>₹{pendingCollection}</Text>
-        </Surface>
-        <Surface style={styles.headerCell} elevation={1}>
-          <Text style={[styles.headerCellLabel, { color: (theme.colors as any).error }]}>Overdue</Text>
+          <Text style={styles.tapSummary}>Tap to view</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerCell} onPress={() => setActiveSegment('overdue')} accessibilityRole="button">
+          <Text style={[styles.headerCellLabel, { color: (theme.colors as any).error }]}>Payment late</Text>
           <Text variant="titleMedium" style={styles.headerCellVal}>₹{overdueCollection}</Text>
-        </Surface>
+          <Text style={styles.tapSummary}>Tap to view</Text>
+        </TouchableOpacity>
       </View>
 
       {/* 2. Operations trigger bar */}
@@ -355,7 +358,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
           loading={isProcessing}
           style={{ flex: 1 }}
         >
-          Generate Rent Invoices
+          Create this month's rent bills
         </Button>
       </View>
 
@@ -365,9 +368,9 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
           value={activeSegment}
           onValueChange={setActiveSegment}
           buttons={[
-            { value: 'pending', label: 'Pending', icon: 'clock-outline' },
-            { value: 'overdue', label: 'Overdue', icon: 'alert-circle-outline' },
-            { value: 'paid', label: 'Paid Logs', icon: 'check-all' },
+            { value: 'pending', label: 'Due', icon: 'clock-outline' },
+            { value: 'overdue', label: 'Late', icon: 'alert-circle-outline' },
+            { value: 'paid', label: 'Received', icon: 'check-all' },
           ]}
         />
       </View>
@@ -384,6 +387,11 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
             <RefreshControl refreshing={isRefetching} onRefresh={refetch} colors={[theme.colors.primary]} />
           }
         >
+          {activeSegment !== 'paid' && payments && payments.length > 0 && (
+            <Surface style={styles.actionGuide} elevation={0}>
+              <Text style={styles.actionGuideText}>For each person: ✏️ change amount · WhatsApp icon sends details · ✓ marks rent received</Text>
+            </Surface>
+          )}
           {payments && payments.length > 0 ? (
             payments.map((pay: any) => {
               const name = pay.tenant?.name || pay.admissionApplication?.name || 'Applicant';
@@ -421,7 +429,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
                     <View style={styles.payBody}>
                       <View>
                         <Text variant="bodySmall" style={{ color: '#64748B' }}>
-                          Due Date: {new Date(pay.dueDate).toLocaleDateString()}
+                          Pay by: {new Date(pay.dueDate).toLocaleDateString()}
                         </Text>
                         {pay.paidDate && (
                           <Text variant="bodySmall" style={{ color: (theme.colors as any).success, fontWeight: '600', marginTop: 2 }}>
@@ -464,7 +472,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
             <View style={styles.emptyContainer}>
               <Icon name="cash-multiple" size={48} color="#94A3B8" />
               <Text style={{ marginTop: 8, color: '#64748B', fontWeight: '500' }}>
-                No payment transactions found in this state.
+                No rent payments found in this section.
               </Text>
             </View>
           )}
@@ -659,6 +667,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    minHeight: 92,
+    justifyContent: 'center',
   },
   headerCellLabel: {
     fontSize: 12,
@@ -669,6 +681,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
   },
+  tapSummary: { color: '#64748B', fontSize: 10, fontWeight: '600', marginTop: 4 },
   operationsBar: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -681,6 +694,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 40,
   },
+  actionGuide: { backgroundColor: '#EFF6FF', borderRadius: 12, padding: 12, marginBottom: 12 },
+  actionGuideText: { color: '#334155', fontSize: 13, lineHeight: 19, fontWeight: '600' },
   payCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,

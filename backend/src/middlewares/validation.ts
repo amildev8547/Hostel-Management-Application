@@ -50,6 +50,17 @@ export const roomSchema = z.object({
   }),
 });
 
+export const bookingSchema = z.object({
+  body: z.object({
+    name: z.string().trim().min(2, 'Name must be at least 2 characters'),
+    phone: z.string().regex(/^\d{10}$/, 'Phone must be exactly 10 digits'),
+    branchId: z.string().min(1, 'Hostel branch is required'),
+    roomId: z.string().min(1, 'Room is required'),
+    expectedJoiningDate: z.string().refine(isValidDateString, { message: 'Choose a valid joining date' }),
+    notes: z.string().max(1000).optional(),
+  }),
+});
+
 // Joining date may be backdated by at most this many days (covers tenants who already
 // moved in and are filling the form late), but no further back than that, and never
 // blocks genuine past admissions beyond the grace window.
@@ -81,6 +92,7 @@ export const publicAdmissionFormSchema = z.object({
       aadhaarBack: z.string().min(10, 'Aadhaar back base64 is required'),
       notes: z.string().optional(),
       branchId: z.string().min(1, 'Branch is required'),
+      bookingToken: z.string().optional(),
       // Admission fee is computed server-side from room pricing; client value (if sent) is ignored.
       amount: z.number().optional(),
     })

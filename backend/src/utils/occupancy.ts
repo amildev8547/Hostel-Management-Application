@@ -3,7 +3,7 @@ import prisma from '../config/db';
 export async function updateRoomOccupancyStatus(roomId: string): Promise<string> {
   const room = await prisma.room.findUnique({
     where: { id: roomId },
-    include: { tenants: { where: { status: 'ACTIVE' } } },
+    include: { tenants: { where: { status: 'ACTIVE' } }, bookings: true },
   });
 
   if (!room) {
@@ -11,12 +11,14 @@ export async function updateRoomOccupancyStatus(roomId: string): Promise<string>
   }
 
   const occupiedBeds = room.tenants.length;
+  const reservedBeds = room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
+  const unavailableBeds = occupiedBeds + reservedBeds;
   let newStatus = room.status;
 
-  if (room.status !== 'MAINTENANCE' || occupiedBeds > 0) {
-    if (occupiedBeds === 0) {
+  if (room.status !== 'MAINTENANCE' || unavailableBeds > 0) {
+    if (unavailableBeds === 0) {
       newStatus = 'AVAILABLE';
-    } else if (occupiedBeds < room.capacity) {
+    } else if (unavailableBeds < room.capacity) {
       newStatus = 'PARTIAL';
     } else {
       newStatus = 'FULL';
@@ -38,6 +40,7 @@ export interface BranchMetrics {
   occupiedRooms: number;
   totalBeds: number;
   occupiedBeds: number;
+  reservedBeds: number;
   vacantBeds: number;
   occupancyPercentage: number;
   thisMonthPaid: number;
@@ -48,7 +51,7 @@ export interface BranchMetrics {
 export async function calculateBranchMetrics(branchId: string): Promise<BranchMetrics> {
   const rooms = await prisma.room.findMany({
     where: { branchId },
-    include: { tenants: { where: { status: 'ACTIVE' } } },
+    include: { tenants: { where: { status: 'ACTIVE' } }, bookings: true },
   });
 
   let totalRooms = rooms.length;
@@ -57,14 +60,18 @@ export async function calculateBranchMetrics(branchId: string): Promise<BranchMe
   let occupiedRooms = 0;
   let totalBeds = 0;
   let occupiedBeds = 0;
+  let reservedBeds = 0;
 
   rooms.forEach((room) => {
     totalBeds += room.capacity;
     occupiedBeds += room.tenants.length;
+    const roomReserved = room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
+    reservedBeds += roomReserved;
+    const unavailableBeds = room.tenants.length + roomReserved;
 
-    if (room.status === 'AVAILABLE') vacantRooms++;
-    else if (room.status === 'PARTIAL') partialRooms++;
-    else if (room.status === 'FULL') occupiedRooms++;
+    if (unavailableBeds === 0) vacantRooms++;
+    else if (unavailableBeds < room.capacity) partialRooms++;
+    else if (unavailableBeds >= room.capacity) occupiedRooms++;
     else if (room.status === 'MAINTENANCE') {
       // In maintenance counts towards rooms but depends on active tenant status
       if (room.tenants.length === 0) vacantRooms++;
@@ -73,7 +80,7 @@ export async function calculateBranchMetrics(branchId: string): Promise<BranchMe
     }
   });
 
-  const vacantBeds = totalBeds - occupiedBeds;
+  const vacantBeds = Math.max(0, totalBeds - occupiedBeds - reservedBeds);
   const occupancyPercentage = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
 
   // Payments calculations
@@ -112,6 +119,7 @@ export async function calculateBranchMetrics(branchId: string): Promise<BranchMe
     occupiedRooms,
     totalBeds,
     occupiedBeds,
+    reservedBeds,
     vacantBeds,
     occupancyPercentage,
     thisMonthPaid,
