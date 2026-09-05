@@ -225,65 +225,15 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
 
             {/* 4. Quick Actions */}
             <Text variant="titleMedium" style={styles.sectionTitle}>Branch Actions</Text>
-            <Button mode="contained" icon="bed" onPress={() => navigation.navigate('BookingForm', { branchId })} style={[styles.actionBtn, { marginBottom: 12 }]} contentStyle={{ paddingVertical: 7 }}>
-              Book a bed for someone
-            </Button>
-            <View style={styles.actionsGrid}>
-              <Button
-                mode="outlined"
-                icon="qrcode"
-                onPress={handleShowQRCode}
-                style={styles.actionBtn}
-                contentStyle={{ paddingVertical: 4 }}
-              >
-                Show QR Code
-              </Button>
-              <Button
-                mode="outlined"
-                icon="share-variant"
-                onPress={handleShareAdmissionLink}
-                style={styles.actionBtn}
-                contentStyle={{ paddingVertical: 4 }}
-              >
-                Share Form
-              </Button>
-            </View>
-
-            <View style={styles.actionsGrid}>
-              <Button
-                mode="outlined"
-                icon="link-variant"
-                onPress={handleCopyLink}
-                style={styles.actionBtn}
-                contentStyle={{ paddingVertical: 4 }}
-              >
-                Copy Apply Link
-              </Button>
-              <Button
-                mode="outlined"
-                icon="plus"
-                onPress={() => navigation.navigate('RoomForm', { branchId })}
-                style={styles.actionBtn}
-                contentStyle={{ paddingVertical: 4 }}
-              >
-                Add Room
-              </Button>
-            </View>
-
-            <View style={styles.actionsGrid}>
-              <Button
-                mode="outlined"
-                icon="cash-multiple"
-                onPress={() => navigation.navigate('PaymentsDashboard', { branchId })}
-                style={styles.actionBtn}
-                contentStyle={{ paddingVertical: 4 }}
-              >
-                Rent Payments
-              </Button>
-              <Button mode="outlined" icon="pencil" onPress={() => navigation.navigate('BranchForm', { branchId })} style={styles.actionBtn} contentStyle={{ paddingVertical: 4 }}>
-                Edit Branch
-              </Button>
-            </View>
+            <Surface style={styles.actionPanel} elevation={1}>
+              <ActionRow icon="bed" title="Book a bed" detail="Reserve a place for someone" onPress={() => navigation.navigate('BookingForm', { branchId })} />
+              <ActionRow icon="qrcode" title="Show application QR code" detail="Let a person scan and apply" onPress={handleShowQRCode} />
+              <ActionRow icon="share-variant" title="Share application form" detail="Send the form using another app" onPress={handleShareAdmissionLink} />
+              <ActionRow icon="link-variant" title="Copy application link" detail="Copy the form address" onPress={handleCopyLink} />
+              <ActionRow icon="plus" title="Add a room" detail="Create another room in this branch" onPress={() => navigation.navigate('RoomForm', { branchId })} />
+              <ActionRow icon="cash-multiple" title="Rent payments" detail="Check received and pending rent" onPress={() => navigation.navigate('PaymentsDashboard', { branchId })} />
+              <ActionRow icon="pencil" title="Edit branch" detail="Change branch information" onPress={() => navigation.navigate('BranchForm', { branchId })} last />
+            </Surface>
           </>
         ) : (
           /* Rooms List Segment */
@@ -360,6 +310,14 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
       </ScrollView>
     </View>
   );
+}
+
+function ActionRow({ icon, title, detail, onPress, last = false }: { icon: keyof typeof Icon.glyphMap; title: string; detail: string; onPress: () => void; last?: boolean }) {
+  return <TouchableOpacity style={[styles.actionRow, !last && styles.actionRowBorder]} onPress={onPress} accessibilityRole="button">
+    <View style={styles.actionIcon}><Icon name={icon} size={23} color="#4F46E5" /></View>
+    <View style={styles.actionText}><Text style={styles.actionTitle}>{title}</Text><Text style={styles.actionDetail}>{detail}</Text></View>
+    <Icon name="chevron-right" size={24} color="#94A3B8" />
+  </TouchableOpacity>;
 }
 
 const styles = StyleSheet.create({
@@ -446,19 +404,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: 8,
   },
-  actionsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 10,
-  },
-  actionBtn: {
-    flex: 1,
-    minHeight: 54,
-    justifyContent: 'center',
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-  },
+  actionPanel: { backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', marginBottom: 8 },
+  actionRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 11 },
+  actionRowBorder: { borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  actionIcon: { width: 44, height: 44, borderRadius: 13, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  actionText: { flex: 1, minWidth: 0, marginHorizontal: 12 },
+  actionTitle: { color: '#0F172A', fontSize: 15, fontWeight: '800' },
+  actionDetail: { color: '#64748B', fontSize: 12, lineHeight: 17, marginTop: 2 },
   center: {
     flex: 1,
     justifyContent: 'center',
