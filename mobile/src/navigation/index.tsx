@@ -7,6 +7,7 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../services/api';
+import { applyLocalNotificationState } from '../services/storage';
 
 // Screens
 import DashboardScreen from '../screens/home/DashboardScreen';
@@ -64,7 +65,7 @@ function NotificationBell() {
     queryKey: ['notifications'],
     queryFn: async () => {
       const response = await apiClient.get('/notifications');
-      return response.data;
+      return applyLocalNotificationState(response.data);
     },
     refetchInterval: 60000,
   });

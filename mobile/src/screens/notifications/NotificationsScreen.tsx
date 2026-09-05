@@ -6,7 +6,7 @@ import apiClient from '../../services/api';
 import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import { showAlert } from '../../utils/alerts';
+import { applyLocalNotificationState, rememberNotificationHidden, rememberNotificationsSeen } from '../../services/storage';
 
 type NotificationsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Notifications'>;
 type NotificationData = { notifications: any[]; unreadCount: number };
@@ -20,15 +20,14 @@ const ICONS: Record<string, { name: keyof typeof Icon.glyphMap; color: string }>
 
 export default function NotificationsScreen({ navigation }: { navigation: NotificationsScreenNavigationProp }) {
   const theme = useTheme(); const queryClient = useQueryClient();
-  const { data, isLoading, refetch, isRefetching } = useQuery<NotificationData>({ queryKey: ['notifications'], queryFn: async () => (await apiClient.get('/notifications')).data });
+  const { data, isLoading, refetch, isRefetching } = useQuery<NotificationData>({ queryKey: ['notifications'], queryFn: async () => applyLocalNotificationState((await apiClient.get('/notifications')).data) });
   const notifications = data?.notifications || [];
   const updateCache = (update: (current: NotificationData) => NotificationData) => queryClient.setQueryData<NotificationData>(['notifications'], (current) => update(current || { notifications: [], unreadCount: 0 }));
 
   const handleMarkAllRead = async () => {
-    const previous = data;
-    updateCache((current) => ({ notifications: current.notifications.filter((item) => !item.isLive).map((item) => ({ ...item, isRead: true })), unreadCount: 0 }));
-    try { await apiClient.post('/notifications/all/read'); await queryClient.invalidateQueries({ queryKey: ['notifications'] }); }
-    catch { if (previous) queryClient.setQueryData(['notifications'], previous); showAlert('Could not mark the reminders as seen. Please try again.'); }
+    await rememberNotificationsSeen(notifications.map((item) => item.id));
+    updateCache((current) => ({ notifications: current.notifications.map((item) => ({ ...item, isRead: true })), unreadCount: 0 }));
+    try { await apiClient.post('/notifications/all/read'); } catch { /* Device state keeps the badge cleared while the server is unavailable. */ }
   };
 
   const openNotification = (item: any) => {
@@ -44,15 +43,15 @@ export default function NotificationsScreen({ navigation }: { navigation: Notifi
   const handlePress = async (item: any) => {
     openNotification(item);
     if (item.isRead) return;
+    await rememberNotificationsSeen([item.id]);
     updateCache((current) => ({ notifications: current.notifications.map((entry) => entry.id === item.id ? { ...entry, isRead: true } : entry), unreadCount: Math.max(0, current.unreadCount - 1) }));
     try { await apiClient.post(`/notifications/${item.id}/read`); } catch { queryClient.invalidateQueries({ queryKey: ['notifications'] }); }
   };
 
   const handleRemove = async (item: any) => {
-    const previous = queryClient.getQueryData<NotificationData>(['notifications']);
+    await rememberNotificationHidden(item.id);
     updateCache((current) => ({ notifications: current.notifications.filter((entry) => entry.id !== item.id), unreadCount: Math.max(0, current.unreadCount - (item.isRead ? 0 : 1)) }));
-    try { await apiClient.delete(`/notifications/${item.id}`); }
-    catch { if (previous) queryClient.setQueryData(['notifications'], previous); showAlert('Could not remove this reminder. Please try again.'); }
+    try { await apiClient.delete(`/notifications/${item.id}`); } catch { /* Removal remains saved on this device and will not reappear. */ }
   };
 
   if (isLoading) return <View style={[styles.center, { backgroundColor: theme.colors.background }]}><ActivityIndicator size="large" color={theme.colors.primary} /></View>;
