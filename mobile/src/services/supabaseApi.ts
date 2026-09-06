@@ -1,15 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAuthStorage } from './storage';
 
-declare const process: {
-  env?: Record<string, string | undefined>;
-};
+declare const process: { env: Record<string, string | undefined> };
 
 const SUPABASE_URL =
-  process.env?.EXPO_PUBLIC_SUPABASE_URL || 'https://mraiwlzhvsvwesbzwqgo.supabase.co';
-const SUPABASE_ANON_KEY = process.env?.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+  process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://mraiwlzhvsvwesbzwqgo.supabase.co';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 export const SUPABASE_STORAGE_BUCKET = 'tenant-documents';
-export const isSupabaseProvider = process.env?.EXPO_PUBLIC_DATA_PROVIDER === 'supabase';
+export const isSupabaseProvider = true;
 
 if (!SUPABASE_ANON_KEY) {
   console.warn('Missing EXPO_PUBLIC_SUPABASE_ANON_KEY. Add it before running the app.');
