@@ -19,6 +19,14 @@ const store = Platform.OS === 'web'
     }
   : SecureStore;
 
+// Supabase Auth-compatible storage. Kept separate from application data so a
+// provider rollback does not destroy either session.
+export const supabaseAuthStorage = {
+  getItem: (key: string) => store.getItemAsync(key),
+  setItem: (key: string, value: string) => store.setItemAsync(key, value),
+  removeItem: (key: string) => store.deleteItemAsync(key),
+};
+
 export async function setToken(token: string): Promise<void> {
   await store.setItemAsync(TOKEN_KEY, token);
 }

@@ -3,8 +3,9 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider } from 'react-native-paper';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AuthProvider } from './src/services/AuthContext';
+import { AuthProvider, useAuth } from './src/services/AuthContext';
 import AppNavigator from './src/navigation';
+import AdminLoginScreen from './src/screens/auth/AdminLoginScreen';
 import { theme } from './src/theme';
 
 // Initialize TanStack React Query Client
@@ -26,11 +27,15 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <PaperProvider theme={theme}>
           <AuthProvider>
-            <AppNavigator />
-            <StatusBar style="auto" />
+            <AppContent />
           </AuthProvider>
         </PaperProvider>
       </QueryClientProvider>
     </SafeAreaProvider>
   );
+}
+
+function AppContent() {
+  const { user, usesSupabase } = useAuth();
+  return <><StatusBar style="auto" />{usesSupabase && !user ? <AdminLoginScreen /> : <AppNavigator />}</>;
 }
