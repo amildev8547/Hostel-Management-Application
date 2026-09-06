@@ -112,6 +112,7 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
                     </View>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontSize: 11, color: '#64748B' }}>Monthly rent</Text>
                     <Text style={{ fontWeight: '700', color: theme.colors.primary }}>₹{room.monthlyRent}</Text>
                     <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
                       🛏️ {room.occupied} of {room.capacity} beds in use

@@ -79,7 +79,7 @@ async function renderApplyForm(branchId: string, booking?: any) {
     supabase.from("branches").select("*").eq("id", branchId).single(),
     supabase
       .from("rooms")
-      .select("room_type,admission_fee,status")
+      .select("room_type,monthly_rent,admission_fee,status")
       .eq("branch_id", branchId)
       .neq("status", "MAINTENANCE")
       .order("admission_fee", { ascending: true }),
@@ -91,8 +91,10 @@ async function renderApplyForm(branchId: string, booking?: any) {
 
   const roomTypes = Array.from(new Set((rooms || []).map((room: any) => room.room_type).filter(Boolean)));
   const fees: Record<string, number> = {};
+  const rents: Record<string, number> = {};
   for (const room of rooms || []) {
     if (!fees[room.room_type]) fees[room.room_type] = Number(room.admission_fee || 0);
+    if (!rents[room.room_type]) rents[room.room_type] = Number(room.monthly_rent || 0);
   }
   const firstType = roomTypes[0] || "2 Share";
   const amount = fees[firstType] || 0;
@@ -153,7 +155,7 @@ async function renderApplyForm(branchId: string, booking?: any) {
       <label>Leaving Date</label><input name="leavingDate" type="date">
       <label>Preferred Room Type *</label>
       <select name="preferredRoomType" id="preferredRoomType" required>
-        ${roomTypes.map((type) => `<option value="${escapeHtml(type)}" ${booking?.room?.room_type === type ? "selected" : ""}>${escapeHtml(type)} - Rs ${escapeHtml(fees[type] || 0)}</option>`).join("")}
+        ${roomTypes.map((type) => `<option value="${escapeHtml(type)}" ${booking?.room?.room_type === type ? "selected" : ""}>${escapeHtml(type)} - Monthly rent Rs ${escapeHtml(rents[type] || 0)} - One-time admission fee Rs ${escapeHtml(fees[type] || 0)}</option>`).join("")}
       </select>
       <label>Profile Photo *</label><input name="profilePhoto" type="file" accept="image/*" required><div class="file-name"></div>
       <label>Aadhaar Front *</label><input name="aadhaarFront" type="file" accept="image/*" required><div class="file-name"></div>
@@ -330,17 +332,17 @@ async function formDetails(url: URL) {
   const branchId = booking?.branch_id || clean(url.searchParams.get("branchId"));
   const [{ data: branch, error: branchError }, { data: rooms, error: roomsError }] = await Promise.all([
     supabase.from("branches").select("id,name,address,owner_email").eq("id", branchId).eq("status", "ACTIVE").maybeSingle(),
-    supabase.from("rooms").select("room_type,admission_fee").eq("branch_id", branchId).neq("status", "MAINTENANCE").order("admission_fee"),
+    supabase.from("rooms").select("room_type,monthly_rent,admission_fee").eq("branch_id", branchId).neq("status", "MAINTENANCE").order("monthly_rent"),
   ]);
   if (branchError || !branch) return jsonResponse({ error: "Branch not found." }, 404);
   if (roomsError) throw new Error(roomsError.message);
   const roomTypes = Object.values((rooms || []).reduce((result: Record<string, any>, room: any) => {
-    if (!result[room.room_type]) result[room.room_type] = { name: room.room_type, admissionFee: Number(room.admission_fee) };
+    if (!result[room.room_type]) result[room.room_type] = { name: room.room_type, monthlyRent: Number(room.monthly_rent), admissionFee: Number(room.admission_fee) };
     return result;
   }, {}));
   return jsonResponse({
     branch: { id: branch.id, name: branch.name, address: branch.address }, roomTypes,
-    booking: booking ? { name: booking.name, phone: booking.phone, expectedJoiningDate: booking.expected_joining_date, bedNumber: booking.bed_number, roomNumber: booking.room.room_number, roomType: booking.room.room_type } : null,
+    booking: booking ? { name: booking.name, phone: booking.phone, expectedJoiningDate: booking.expected_joining_date, bedNumber: booking.bed_number, roomNumber: booking.room.room_number, roomType: booking.room.room_type, monthlyRent: Number(booking.room.monthly_rent), admissionFee: Number(booking.room.admission_fee) } : null,
   });
 }
 

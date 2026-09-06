@@ -283,7 +283,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
                         </View>
                       </View>
 
-                      <View style={styles.roomRight}><Text variant="titleMedium" style={{ fontWeight: '700', color: theme.colors.primary }}>₹{room.monthlyRent}</Text><Icon name="chevron-right" size={23} color="#94A3B8" /></View>
+                      <View style={styles.roomRight}><Text variant="bodyMedium" style={{ fontWeight: '700', color: theme.colors.primary }}>Rent: ₹{room.monthlyRent} / month</Text><Icon name="chevron-right" size={23} color="#94A3B8" /></View>
                       <Text variant="bodySmall" style={styles.bedSummary}>{room.occupied} in use · {room.reserved || 0} reserved · {room.vacant} free</Text>
                     </Card.Content>
                   </Card>

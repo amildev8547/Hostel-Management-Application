@@ -99,7 +99,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
             <Text variant="titleMedium" style={styles.specVal}>{room.occupied} of {room.capacity}</Text>
           </View>
           <View style={styles.specCell}>
-            <Text variant="bodySmall" style={styles.specLabel}>Monthly Rent</Text>
+            <Text variant="bodySmall" style={styles.specLabel}>Monthly room rent</Text>
             <Text variant="titleMedium" style={[styles.specVal, { color: theme.colors.primary }]}>₹{room.monthlyRent}</Text>
           </View>
         </View>

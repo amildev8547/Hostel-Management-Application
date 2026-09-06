@@ -343,7 +343,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
             <Text variant="titleMedium" style={styles.specVal}>Room {tenant.room.roomNumber}</Text>
           </View>
           <View style={styles.specCell}>
-            <Text variant="bodySmall" style={styles.specLabel}>Monthly Rent</Text>
+            <Text variant="bodySmall" style={styles.specLabel}>Monthly room rent</Text>
             <Text variant="titleMedium" style={[styles.specVal, { color: theme.colors.primary }]}>₹{tenant.room.monthlyRent}</Text>
           </View>
         </View>
