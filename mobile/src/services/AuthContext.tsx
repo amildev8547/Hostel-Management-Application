@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import * as Linking from 'expo-linking';
 import { isSupabaseProvider, supabase } from './supabaseApi';
 
 interface User { id: string; email: string; name: string; role: string }
@@ -7,24 +6,18 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   usesSupabase: boolean;
-  sendLoginLink: (email: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  sendPasswordSetup: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const singleOwnerUser: User = { id: 'single-owner', email: 'owner@hostelhub.com', name: 'Amil Dev', role: 'OWNER' };
-const AUTH_CALLBACK_URL = 'https://amildev8547.github.io/Hostel-Management-Application/auth-callback.html';
 
 function sessionUser(session: any): User | null {
   if (!session?.user?.email) return null;
   return { id: session.user.id, email: session.user.email, name: session.user.email.split('@')[0], role: 'OWNER' };
-}
-
-async function consumeAuthLink(url: string) {
-  const normalized = url.replace('#', '?');
-  const params = new URL(normalized).searchParams;
-  const accessToken = params.get('access_token'); const refreshToken = params.get('refresh_token');
-  if (accessToken && refreshToken) await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -34,18 +27,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isSupabaseProvider) return;
     supabase.auth.getSession().then(({ data }) => { setUser(sessionUser(data.session)); setLoading(false); });
-    Linking.getInitialURL().then((url) => { if (url) return consumeAuthLink(url); });
-    const linkSubscription = Linking.addEventListener('url', ({ url }) => consumeAuthLink(url));
     const { data: authSubscription } = supabase.auth.onAuthStateChange((_event, session) => { setUser(sessionUser(session)); setLoading(false); });
-    return () => { linkSubscription.remove(); authSubscription.subscription.unsubscribe(); };
+    return () => { authSubscription.subscription.unsubscribe(); };
   }, []);
 
   const value = useMemo<AuthContextType>(() => ({
     user, loading, usesSupabase: isSupabaseProvider,
-    sendLoginLink: async (email) => {
-      const returnTo = Linking.createURL('auth/callback');
-      const emailRedirectTo = `${AUTH_CALLBACK_URL}?returnTo=${encodeURIComponent(returnTo)}`;
-      const { error } = await supabase.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { emailRedirectTo } });
+    signIn: async (email, password) => {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+      if (error) throw error;
+    },
+    sendPasswordSetup: async (email) => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: 'https://amildev8547.github.io/Hostel-Management-Application/auth-callback.html',
+      });
+      if (error) throw error;
+    },
+    updatePassword: async (password) => {
+      const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
     },
     signOut: async () => { if (isSupabaseProvider) await supabase.auth.signOut(); },

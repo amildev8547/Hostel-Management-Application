@@ -7,12 +7,15 @@ import apiClient from '../../services/api';
 import { showAlert } from '../../utils/alerts';
 
 export default function SettingsScreen() {
-  const { user } = useAuth();
+  const { user, updatePassword, signOut } = useAuth();
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [upiId, setUpiId] = useState('');
   const [receiverName, setReceiverName] = useState('');
   const [paymentWhatsapp, setPaymentWhatsapp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
 
   // Load Settings
   const { data: settings } = useQuery<Record<string, string>>({
@@ -75,6 +78,19 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (newPassword.length < 8) return showAlert('Use at least 8 characters for the new password.');
+    if (newPassword !== confirmPassword) return showAlert('The two passwords do not match.');
+    setSavingPassword(true);
+    try {
+      await updatePassword(newPassword);
+      setNewPassword(''); setConfirmPassword('');
+      showAlert('Password changed successfully.');
+    } catch (error: any) {
+      showAlert(error.message || 'Could not change the password.');
+    } finally { setSavingPassword(false); }
+  };
+
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* 1. Profile Header */}
@@ -128,6 +144,15 @@ export default function SettingsScreen() {
           />
         </Card.Content>
       </Card>
+
+      <Text variant="titleMedium" style={styles.sectionTitle}>Login and security</Text>
+      <Card style={styles.settingsCard}><Card.Content>
+        <Text style={styles.sectionHelp}>Change the password before handing the app to another person.</Text>
+        <TextInput label="New password" value={newPassword} onChangeText={setNewPassword} secureTextEntry mode="outlined" style={styles.input} />
+        <TextInput label="Enter new password again" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry mode="outlined" style={styles.input} />
+        <Button mode="contained" icon="lock-reset" onPress={handleChangePassword} loading={savingPassword} disabled={savingPassword} style={styles.saveButton}>Change password</Button>
+        <Button mode="outlined" icon="logout" onPress={signOut} style={styles.signOutButton}>Log out on this phone</Button>
+      </Card.Content></Card>
 
       <Text variant="titleMedium" style={styles.sectionTitle}>Where residents should pay</Text>
       <Card style={styles.settingsCard}>
@@ -249,4 +274,5 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingVertical: 8,
   },
+  signOutButton: { borderRadius: 12, marginTop: 12 },
 });
