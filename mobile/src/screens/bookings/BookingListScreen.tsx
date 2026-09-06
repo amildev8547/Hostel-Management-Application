@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import apiClient from '../../services/api';
-import { getBackendBaseUrl } from '../../utils/backendUrl';
+import { getBookingUrl } from '../../utils/backendUrl';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 
@@ -20,7 +20,7 @@ export default function BookingListScreen({ navigation }: Props) {
   });
 
   const shareForm = async (booking: any) => {
-    const url = `${getBackendBaseUrl()}/book/${booking.secureToken}`;
+    const url = getBookingUrl(booking.secureToken);
     await Share.share({
       title: 'Complete hostel admission',
       message: `Hello ${booking.name}, your bed is reserved at ${booking.branch.name}, Room ${booking.room.roomNumber}, Bed ${booking.bedNumber}. Please complete your admission details here:\n${url}`,

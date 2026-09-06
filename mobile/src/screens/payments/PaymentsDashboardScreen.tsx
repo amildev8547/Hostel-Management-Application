@@ -8,7 +8,7 @@ import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigat
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert } from '../../utils/alerts';
-import { getBackendBaseUrl } from '../../utils/backendUrl';
+import { getPaymentUrl } from '../../utils/backendUrl';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type PaymentsDashboardRouteProp = RouteProp<RootStackParamList, 'PaymentsDashboard'>;
@@ -244,7 +244,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
     try {
       const linkResponse = await apiClient.post(`/payments/${payment.id}/link`);
       const upiPaymentUrl = linkResponse.data.upiPaymentUrl || '';
-      const manualPaymentUrl = linkResponse.data.manualPaymentUrl || `${getBackendBaseUrl()}/pay/${payment.id}`;
+      const manualPaymentUrl = linkResponse.data.manualPaymentUrl || getPaymentUrl(payment.id);
 
       const tenantName = payment.tenant?.name || 'Tenant';
       const phone = payment.tenant?.whatsappNumber || payment.tenant?.phone || '';

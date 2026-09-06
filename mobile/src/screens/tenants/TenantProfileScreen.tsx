@@ -8,7 +8,7 @@ import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigat
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert, showConfirm } from '../../utils/alerts';
-import { getBackendBaseUrl } from '../../utils/backendUrl';
+import { getPaymentUrl } from '../../utils/backendUrl';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type TenantProfileRouteProp = RouteProp<RootStackParamList, 'TenantProfile'>;
@@ -168,7 +168,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
     try {
       const linkResponse = await apiClient.post(`/payments/${pay.id}/link`);
       const upiPaymentUrl = linkResponse.data.upiPaymentUrl || '';
-      const manualPaymentUrl = linkResponse.data.manualPaymentUrl || `${getBackendBaseUrl()}/pay/${pay.id}`;
+      const manualPaymentUrl = linkResponse.data.manualPaymentUrl || getPaymentUrl(pay.id);
 
       const phone = tenant.whatsappNumber || tenant.phone || '';
       const branchName = tenant.room?.branch?.name || '';

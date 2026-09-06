@@ -119,6 +119,25 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+async function signedDocumentUrl(value?: string | null) {
+  if (!value || /^https?:\/\//i.test(value)) return value || null;
+  const { data, error } = await supabase.storage
+    .from(SUPABASE_STORAGE_BUCKET)
+    .createSignedUrl(value, 60 * 60);
+  if (error) return null;
+  return data.signedUrl;
+}
+
+async function withSignedDocuments<T extends Record<string, any>>(row: T): Promise<T> {
+  if (!row) return row;
+  const [profilePhotoUrl, aadhaarFrontUrl, aadhaarBackUrl] = await Promise.all([
+    signedDocumentUrl(row.profile_photo_url ?? row.profilePhotoUrl),
+    signedDocumentUrl(row.aadhaar_front_url ?? row.aadhaarFrontUrl),
+    signedDocumentUrl(row.aadhaar_back_url ?? row.aadhaarBackUrl),
+  ]);
+  return { ...row, profile_photo_url: profilePhotoUrl, aadhaar_front_url: aadhaarFrontUrl, aadhaar_back_url: aadhaarBackUrl };
+}
+
 function startOfMonth(year: number, month: number) {
   return `${year}-${String(month).padStart(2, '0')}-01`;
 }
@@ -328,7 +347,7 @@ async function getAdmissions(params: Record<string, any> = {}) {
   if (params.search) query = query.or(`name.ilike.%${params.search}%,phone.ilike.%${params.search}%`);
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw apiError(error.message);
-  return camel(data || []);
+  return camel(await Promise.all((data || []).map(withSignedDocuments)));
 }
 
 async function getAdmission(id: string) {
@@ -338,66 +357,17 @@ async function getAdmission(id: string) {
     .eq('id', id)
     .single();
   if (error) throw apiError(error.message);
-  return camel(data);
+  return camel(await withSignedDocuments(data));
 }
 
 async function reviewAdmission(id: string, payload: any) {
-  const application = await getAdmission(id);
-  if (application.status !== 'PENDING') throw apiError('This application has already been processed.');
-
-  if (payload.status === 'APPROVED') {
-    if (!payload.roomId) throw apiError('Room selection is required for approval.');
-    const room = await getRoom(payload.roomId);
-    if (application.booking && application.booking.roomId !== payload.roomId) throw apiError('Use the room reserved for this booking.');
-    if (!application.booking && room.occupied + room.reserved >= room.capacity) throw apiError('Selected room has no available bed.');
-
-    const { data: tenant, error } = await supabase
-      .from('tenants')
-      .insert(
-        snakePayload({
-          name: application.name,
-          phone: application.phone,
-          whatsappNumber: application.whatsappNumber,
-          address: application.address,
-          guardianName: application.guardianName,
-          guardianPhone: application.guardianPhone,
-          nearestPoliceStation: application.nearestPoliceStation,
-          occupation: application.occupation,
-          workLocation: application.workLocation,
-          joiningDate: application.joiningDate,
-          leavingDate: application.leavingDate,
-          status: 'ACTIVE',
-          profilePhotoUrl: application.profilePhotoUrl,
-          aadhaarFrontUrl: application.aadhaarFrontUrl,
-          aadhaarBackUrl: application.aadhaarBackUrl,
-          roomId: payload.roomId,
-        })
-      )
-      .select()
-      .single();
-    if (error) throw apiError(error.message);
-
-    await supabase.from('documents').update({ tenant_id: tenant.id }).eq('admission_application_id', id);
-    await supabase.from('payments').update({ tenant_id: tenant.id }).eq('admission_application_id', id);
-    await supabase.from('admission_applications').update({ status: 'APPROVED' }).eq('id', id);
-    if (application.booking) await supabase.from('bookings').update({ status: 'OCCUPIED', tenant_id: tenant.id }).eq('id', application.booking.id);
-    await updateRoomOccupancy(payload.roomId);
-    await supabase.from('notifications').insert({
-      title: 'Admission Approved',
-      message: `Application for ${application.name} was approved. Tenant has been allocated to Room ${room.roomNumber}.`,
-      type: 'ADMISSION_APPROVED',
-    });
-    return { message: 'Application approved. Tenant active.', tenant: camel(tenant) };
-  }
-
-  await supabase.from('admission_applications').update({ status: 'REJECTED' }).eq('id', id);
-  if (application.booking) await supabase.from('bookings').delete().eq('id', application.booking.id);
-  await supabase.from('notifications').insert({
-    title: 'Admission Rejected',
-    message: `Application for ${application.name} was rejected.`,
-    type: 'ADMISSION_APPROVED',
+  const { data, error } = await supabase.rpc('review_admission_application', {
+    p_application_id: id,
+    p_status: payload.status,
+    p_room_id: payload.roomId || null,
   });
-  return { message: 'Application rejected.' };
+  if (error) throw apiError(error.message);
+  return camel(data);
 }
 
 async function getTenant(id: string) {
@@ -407,7 +377,8 @@ async function getTenant(id: string) {
     .eq('id', id)
     .single();
   if (error) throw apiError(error.message);
-  return camel({ ...data, payments: (data.payments || []).sort((a: any, b: any) => String(b.due_date).localeCompare(String(a.due_date))) });
+  const signed = await withSignedDocuments(data);
+  return camel({ ...signed, payments: (data.payments || []).sort((a: any, b: any) => String(b.due_date).localeCompare(String(a.due_date))) });
 }
 
 async function getTenants(params: Record<string, any> = {}) {
@@ -425,7 +396,7 @@ async function getTenants(params: Record<string, any> = {}) {
   }
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw apiError(error.message);
-  let tenants = camel(data || []);
+  let tenants = camel(await Promise.all((data || []).map(withSignedDocuments)));
   if (params.search) {
     const search = String(params.search).toLowerCase();
     tenants = tenants.filter((tenant: any) => tenant.name.toLowerCase().includes(search) || tenant.phone.includes(search));

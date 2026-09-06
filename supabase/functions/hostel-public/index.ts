@@ -68,14 +68,14 @@ function functionPath(req: Request) {
   return path.replace(/^\/hostel-public/, "") || "/";
 }
 
-async function getSettings() {
-  const { data, error } = await supabase.from("settings").select("key,value");
+async function getSettings(ownerEmail: string) {
+  const { data, error } = await supabase.from("settings").select("key,value").eq("owner_email", ownerEmail);
   if (error) throw new Error(error.message);
   return Object.fromEntries((data || []).map((item: { key: string; value: string }) => [item.key, item.value || ""]));
 }
 
-async function renderApplyForm(branchId: string) {
-  const [{ data: branch, error: branchError }, { data: rooms, error: roomsError }, settings] = await Promise.all([
+async function renderApplyForm(branchId: string, booking?: any) {
+  const [{ data: branch, error: branchError }, { data: rooms, error: roomsError }] = await Promise.all([
     supabase.from("branches").select("*").eq("id", branchId).single(),
     supabase
       .from("rooms")
@@ -83,11 +83,11 @@ async function renderApplyForm(branchId: string) {
       .eq("branch_id", branchId)
       .neq("status", "MAINTENANCE")
       .order("admission_fee", { ascending: true }),
-    getSettings(),
   ]);
 
   if (branchError || !branch) return textResponse("<h1>Admission form not found</h1>", 404);
   if (roomsError) throw new Error(roomsError.message);
+  const settings = await getSettings(branch.owner_email);
 
   const roomTypes = Array.from(new Set((rooms || []).map((room: any) => room.room_type).filter(Boolean)));
   const fees: Record<string, number> = {};
@@ -138,8 +138,10 @@ async function renderApplyForm(branchId: string) {
     <div id="message" class="message"></div>
     <form id="admissionForm">
       <input type="hidden" name="branchId" value="${escapeHtml(branchId)}">
-      <label>Name *</label><input name="name" required>
-      <label>Phone *</label><input name="phone" required inputmode="numeric" minlength="10" maxlength="10">
+      <input type="hidden" name="bookingToken" value="${escapeHtml(booking?.secure_token || "")}">
+      ${booking ? `<p class="muted"><strong>Reserved:</strong> Room ${escapeHtml(booking.room?.room_number)}, bed ${escapeHtml(booking.bed_number)}. These booking details cannot be changed.</p>` : ""}
+      <label>Name *</label><input name="name" required value="${escapeHtml(booking?.name || "")}" ${booking ? "readonly" : ""}>
+      <label>Phone *</label><input name="phone" required inputmode="numeric" minlength="10" maxlength="10" value="${escapeHtml(booking?.phone || "")}" ${booking ? "readonly" : ""}>
       <label>WhatsApp Number *</label><input name="whatsappNumber" required inputmode="numeric" minlength="10" maxlength="10">
       <label>Address *</label><textarea name="address" required></textarea>
       <label>Guardian Name *</label><input name="guardianName" required>
@@ -147,15 +149,15 @@ async function renderApplyForm(branchId: string) {
       <label>Nearest Police Station *</label><input name="nearestPoliceStation" required>
       <label>Occupation *</label><input name="occupation" required>
       <label>Work Location *</label><input name="workLocation" required>
-      <label>Joining Date *</label><input name="joiningDate" type="date" required>
+      <label>Joining Date *</label><input name="joiningDate" type="date" required value="${escapeHtml(booking?.expected_joining_date || "")}" ${booking ? "readonly" : ""}>
       <label>Leaving Date</label><input name="leavingDate" type="date">
       <label>Preferred Room Type *</label>
       <select name="preferredRoomType" id="preferredRoomType" required>
-        ${roomTypes.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)} - Rs ${escapeHtml(fees[type] || 0)}</option>`).join("")}
+        ${roomTypes.map((type) => `<option value="${escapeHtml(type)}" ${booking?.room?.room_type === type ? "selected" : ""}>${escapeHtml(type)} - Rs ${escapeHtml(fees[type] || 0)}</option>`).join("")}
       </select>
-      <label>Profile Photo</label><input name="profilePhoto" type="file" accept="image/*"><div class="file-name"></div>
-      <label>Aadhaar Front</label><input name="aadhaarFront" type="file" accept="image/*,.pdf"><div class="file-name"></div>
-      <label>Aadhaar Back</label><input name="aadhaarBack" type="file" accept="image/*,.pdf"><div class="file-name"></div>
+      <label>Profile Photo *</label><input name="profilePhoto" type="file" accept="image/*" required><div class="file-name"></div>
+      <label>Aadhaar Front *</label><input name="aadhaarFront" type="file" accept="image/*" required><div class="file-name"></div>
+      <label>Aadhaar Back *</label><input name="aadhaarBack" type="file" accept="image/*" required><div class="file-name"></div>
       <p class="muted">After submission, pay using the UPI button shown below and share the screenshot on WhatsApp.</p>
       <button type="submit">Submit Application</button>
       ${upiUrl ? `<a class="button" href="${escapeHtml(upiUrl)}">Pay Admission Fee by UPI</a>` : ""}
@@ -200,47 +202,44 @@ async function renderApplyForm(branchId: string) {
 </html>`);
 }
 
-async function uploadFile(file: File, applicationId: string, type: string) {
+async function uploadFile(file: File, uploadId: string, type: string) {
   if (!file || !file.size) return "";
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `applications/${applicationId}/${type}-${Date.now()}-${safeName}`;
+  const path = `applications/${uploadId}/${type}-${Date.now()}-${safeName}`;
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
     contentType: file.type || "application/octet-stream",
     upsert: false,
   });
   if (error) throw new Error(`Could not upload ${type}: ${error.message}`);
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-  await supabase.from("documents").insert({
-    file_name: file.name,
-    file_type: type,
-    storage_path: path,
-    bucket,
-    public_url: data.publicUrl,
-    admission_application_id: applicationId,
-  });
-  return data.publicUrl;
+  return { path, fileName: file.name, fileType: type };
 }
 
 async function submitAdmission(req: Request) {
   const form = await req.formData();
   const branchId = clean(form.get("branchId"));
+  const bookingToken = clean(form.get("bookingToken"));
   const required = ["name", "phone", "whatsappNumber", "address", "guardianName", "guardianPhone", "nearestPoliceStation", "occupation", "workLocation", "joiningDate", "preferredRoomType"];
   for (const key of required) {
     if (!clean(form.get(key))) return jsonResponse({ error: `${key} is required.` }, 400);
   }
 
-  const [{ data: branch, error: branchError }, { data: feeRoom, error: roomError }, settings] = await Promise.all([
-    supabase.from("branches").select("*").eq("id", branchId).single(),
+  const { data: booking, error: bookingError } = bookingToken
+    ? await supabase.from("bookings").select("*,room:rooms(*)").eq("secure_token", bookingToken).maybeSingle()
+    : { data: null, error: null };
+  if (bookingError) throw new Error(bookingError.message);
+  if (bookingToken && (!booking || booking.status !== "RESERVED")) return jsonResponse({ error: "This booking link is no longer active." }, 409);
+  const selectedBranchId = booking?.branch_id || branchId;
+  const [{ data: branch, error: branchError }, { data: feeRoom, error: roomError }] = await Promise.all([
+    supabase.from("branches").select("*").eq("id", selectedBranchId).single(),
     supabase
       .from("rooms")
       .select("admission_fee")
-      .eq("branch_id", branchId)
-      .eq("room_type", clean(form.get("preferredRoomType")))
+      .eq("branch_id", selectedBranchId)
+      .eq("room_type", booking?.room?.room_type || clean(form.get("preferredRoomType")))
       .neq("status", "MAINTENANCE")
       .order("admission_fee", { ascending: true })
       .limit(1)
       .maybeSingle(),
-    getSettings(),
   ]);
 
   if (branchError || !branch) return jsonResponse({ error: "Branch not found. Please ask the owner for a fresh link." }, 404);
@@ -262,80 +261,103 @@ async function submitAdmission(req: Request) {
     if (validationError) return jsonResponse({ error: validationError }, 400);
   }
 
-  const { data: application, error: appError } = await supabase
-    .from("admission_applications")
-    .insert({
-      name: clean(form.get("name")),
-      phone,
-      whatsapp_number: whatsappNumber,
-      address: clean(form.get("address")),
-      guardian_name: clean(form.get("guardianName")),
-      guardian_phone: guardianPhone,
-      nearest_police_station: clean(form.get("nearestPoliceStation")),
-      occupation: clean(form.get("occupation")),
-      work_location: clean(form.get("workLocation")),
-      joining_date: clean(form.get("joiningDate")),
-      leaving_date: clean(form.get("leavingDate")) || null,
-      preferred_room_type: clean(form.get("preferredRoomType")),
-      status: "PENDING",
-      payment_status: "PENDING",
-      branch_id: branchId,
-    })
-    .select()
-    .single();
-
-  if (appError) throw new Error(appError.message);
-
+  const uploadId = crypto.randomUUID();
+  let uploads: { path: string; fileName: string; fileType: string }[] = [];
   try {
-    const [profilePhotoUrl, aadhaarFrontUrl, aadhaarBackUrl] = await Promise.all([
-      uploadFile(form.get("profilePhoto") as File, application.id, "profile_photo"),
-      uploadFile(form.get("aadhaarFront") as File, application.id, "aadhaar_front"),
-      uploadFile(form.get("aadhaarBack") as File, application.id, "aadhaar_back"),
+    uploads = await Promise.all([
+      uploadFile(form.get("profilePhoto") as File, uploadId, "PROFILE_PHOTO"),
+      uploadFile(form.get("aadhaarFront") as File, uploadId, "AADHAAR_FRONT"),
+      uploadFile(form.get("aadhaarBack") as File, uploadId, "AADHAAR_BACK"),
     ]);
-
-    await supabase
-      .from("admission_applications")
-      .update({ profile_photo_url: profilePhotoUrl || null, aadhaar_front_url: aadhaarFrontUrl || null, aadhaar_back_url: aadhaarBackUrl || null })
-      .eq("id", application.id);
-
-    const amount = Number(feeRoom?.admission_fee || 0);
+    const payload = {
+      booking_token: bookingToken || null, branch_id: selectedBranchId,
+      name: clean(form.get("name")), phone, whatsapp_number: whatsappNumber,
+      address: clean(form.get("address")), guardian_name: clean(form.get("guardianName")),
+      guardian_phone: guardianPhone, nearest_police_station: clean(form.get("nearestPoliceStation")),
+      occupation: clean(form.get("occupation")), work_location: clean(form.get("workLocation")),
+      joining_date: clean(form.get("joiningDate")), leaving_date: clean(form.get("leavingDate")),
+      preferred_room_type: booking?.room?.room_type || clean(form.get("preferredRoomType")), notes: clean(form.get("notes")),
+      profile_photo_path: uploads[0].path, aadhaar_front_path: uploads[1].path, aadhaar_back_path: uploads[2].path,
+      documents: uploads.map((item) => ({ file_name: item.fileName, file_type: item.fileType, storage_path: item.path })),
+    };
+    const { data: result, error: rpcError } = await supabase.rpc("create_public_admission", { p_payload: payload });
+    if (rpcError) throw new Error(rpcError.message);
+    const settings = await getSettings(branch.owner_email);
+    const amount = Number(result.amount || feeRoom?.admission_fee || 0);
     const upiPaymentUrl = buildUpiUrl(
       String(settings.payment_upi_id || ""),
       String(settings.payment_receiver_name || branch.name),
       amount,
-      `HostelHub admission ${application.id}`,
+      `HostelHub admission ${result.application_id}`,
     );
-
-    const { data: payment, error: paymentError } = await supabase
-      .from("payments")
-      .insert({
-        amount,
-        status: "PENDING",
-        payment_type: "ADMISSION",
-        due_date: new Date().toISOString().slice(0, 10),
-        payment_method: "UPI",
-        payment_link_url: upiPaymentUrl,
-        admission_application_id: application.id,
-        branch_id: branchId,
-      })
-      .select()
-      .single();
-
-    if (paymentError) throw new Error(paymentError.message);
-
-    await supabase.from("notifications").insert({
-      title: "New Admission Application",
-      message: `${application.name} submitted an admission application for ${branch.name}.`,
-      type: "ADMISSION_RECEIVED",
-    });
-
-    return jsonResponse({ applicationId: application.id, paymentId: payment.id, upiPaymentUrl });
+    const manualPaymentUrl = `${supabaseUrl}/functions/v1/hostel-public/pay/${result.payment_id}`;
+    await supabase.from("payments").update({ payment_link_url: upiPaymentUrl || manualPaymentUrl }).eq("id", result.payment_id);
+    return jsonResponse({ applicationId: result.application_id, paymentId: result.payment_id, paymentLink: upiPaymentUrl || manualPaymentUrl, upiPaymentUrl });
   } catch (error) {
-    await supabase.from("documents").delete().eq("admission_application_id", application.id);
-    await supabase.from("payments").delete().eq("admission_application_id", application.id);
-    await supabase.from("admission_applications").delete().eq("id", application.id);
+    if (uploads.length) await supabase.storage.from(bucket).remove(uploads.map((item) => item.path));
     throw error;
   }
+}
+
+async function renderBookingForm(token: string) {
+  const { data: booking, error } = await supabase.from("bookings").select("*,room:rooms(*),branch:branches(*)").eq("secure_token", token).maybeSingle();
+  if (error || !booking) return textResponse("<h1>This booking link is not valid</h1>", 404);
+  if (booking.status !== "RESERVED") return textResponse(`<h1>${booking.status === "FORM_SUBMITTED" ? "Application already submitted" : "This booking is already completed"}</h1>`, 409);
+  return renderApplyForm(booking.branch_id, booking);
+}
+
+async function renderPayment(paymentId: string) {
+  const { data: payment, error } = await supabase.from("payments").select("*,branch:branches(*),tenant:tenants(*,room:rooms(*)),admissionApplication:admission_applications(*)").eq("id", paymentId).maybeSingle();
+  if (error || !payment) return textResponse("<h1>Invoice details not found</h1>", 404);
+  const settings = await getSettings(payment.owner_email);
+  const payer = payment.tenant?.name || payment.admissionApplication?.name || "Applicant";
+  const note = `HostelHub ${payment.payment_type} ${payment.id}`;
+  const upi = buildUpiUrl(settings.payment_upi_id || "", settings.payment_receiver_name || payment.branch.name, Number(payment.amount), note);
+  const whatsapp = digits(settings.payment_whatsapp_number || "");
+  return textResponse(`<!doctype html><html><head><meta name="viewport" content="width=device-width"><title>Pay by UPI</title><style>body{font-family:Arial;background:#f8fafc;margin:0;padding:24px;color:#0f172a}.card{max-width:480px;margin:auto;background:white;padding:24px;border-radius:14px;border:1px solid #e2e8f0}.amount{font-size:36px;font-weight:800;color:#2563eb;text-align:center}.btn{display:block;padding:14px;margin-top:14px;border-radius:9px;text-align:center;text-decoration:none;font-weight:800;background:#2563eb;color:white}.wa{background:#16a34a}.muted{color:#64748b}</style></head><body><div class="card"><h1>Pay by UPI</h1><p class="muted">${escapeHtml(payment.branch.name)}</p><div class="amount">Rs ${escapeHtml(payment.amount)}</div><p><b>Name:</b> ${escapeHtml(payer)}</p><p><b>Invoice:</b> ${escapeHtml(payment.id)}</p>${upi ? `<a class="btn" href="${escapeHtml(upi)}">Open UPI App</a>` : `<p>UPI ID is not configured. Contact the hostel owner.</p>`}<p>After paying, take a screenshot and share it with the hostel owner.</p><a class="btn wa" href="${whatsapp ? `https://wa.me/91${escapeHtml(whatsapp)}` : "https://wa.me/"}">Share on WhatsApp</a></div></body></html>`);
+}
+
+async function formDetails(url: URL) {
+  const bookingToken = clean(url.searchParams.get("bookingToken"));
+  let booking: any = null;
+  if (bookingToken) {
+    const result = await supabase.from("bookings").select("*,room:rooms(*),branch:branches(*)").eq("secure_token", bookingToken).maybeSingle();
+    if (result.error) throw new Error(result.error.message);
+    booking = result.data;
+    if (!booking) return jsonResponse({ error: "This booking link is not valid." }, 404);
+    if (booking.status !== "RESERVED") return jsonResponse({ error: booking.status === "FORM_SUBMITTED" ? "Application already submitted." : "This booking is already completed." }, 409);
+  }
+  const branchId = booking?.branch_id || clean(url.searchParams.get("branchId"));
+  const [{ data: branch, error: branchError }, { data: rooms, error: roomsError }] = await Promise.all([
+    supabase.from("branches").select("id,name,address,owner_email").eq("id", branchId).eq("status", "ACTIVE").maybeSingle(),
+    supabase.from("rooms").select("room_type,admission_fee").eq("branch_id", branchId).neq("status", "MAINTENANCE").order("admission_fee"),
+  ]);
+  if (branchError || !branch) return jsonResponse({ error: "Branch not found." }, 404);
+  if (roomsError) throw new Error(roomsError.message);
+  const roomTypes = Object.values((rooms || []).reduce((result: Record<string, any>, room: any) => {
+    if (!result[room.room_type]) result[room.room_type] = { name: room.room_type, admissionFee: Number(room.admission_fee) };
+    return result;
+  }, {}));
+  return jsonResponse({
+    branch: { id: branch.id, name: branch.name, address: branch.address }, roomTypes,
+    booking: booking ? { name: booking.name, phone: booking.phone, expectedJoiningDate: booking.expected_joining_date, bedNumber: booking.bed_number, roomNumber: booking.room.room_number, roomType: booking.room.room_type } : null,
+  });
+}
+
+async function paymentDetails(url: URL) {
+  const paymentId = clean(url.searchParams.get("paymentId"));
+  const { data: payment, error } = await supabase.from("payments").select("id,amount,payment_type,due_date,owner_email,branch:branches(name),tenant:tenants(name,room:rooms(room_number)),admissionApplication:admission_applications(name)").eq("id", paymentId).maybeSingle();
+  if (error || !payment) return jsonResponse({ error: "Invoice details not found." }, 404);
+  const settings = await getSettings(payment.owner_email);
+  const payerName = payment.tenant?.name || payment.admissionApplication?.name || "Applicant";
+  return jsonResponse({
+    id: payment.id, amount: Number(payment.amount), paymentType: payment.payment_type,
+    dueDate: payment.due_date, branchName: payment.branch?.name, payerName,
+    roomNumber: payment.tenant?.room?.room_number || null,
+    upiId: settings.payment_upi_id || "", receiverName: settings.payment_receiver_name || payment.branch?.name || "HostelHub",
+    whatsappNumber: digits(settings.payment_whatsapp_number || ""),
+    upiUrl: buildUpiUrl(settings.payment_upi_id || "", settings.payment_receiver_name || payment.branch?.name || "HostelHub", Number(payment.amount), `HostelHub ${payment.payment_type} ${payment.id}`),
+  });
 }
 
 Deno.serve(async (req: Request) => {
@@ -343,8 +365,15 @@ Deno.serve(async (req: Request) => {
 
   try {
     const path = functionPath(req);
+    const url = new URL(req.url);
+    if (req.method === "GET" && path === "/api/form") return await formDetails(url);
+    if (req.method === "GET" && path === "/api/payment") return await paymentDetails(url);
     const applyMatch = path.match(/^\/apply\/([^/]+)$/);
     if (req.method === "GET" && applyMatch) return await renderApplyForm(decodeURIComponent(applyMatch[1]));
+    const bookingMatch = path.match(/^\/book\/([^/]+)$/);
+    if (req.method === "GET" && bookingMatch) return await renderBookingForm(decodeURIComponent(bookingMatch[1]));
+    const paymentMatch = path.match(/^\/pay\/([^/]+)$/);
+    if (req.method === "GET" && paymentMatch) return await renderPayment(decodeURIComponent(paymentMatch[1]));
     if (req.method === "POST" && path === "/api/admissions/apply") return await submitAdmission(req);
     return textResponse("<h1>Not found</h1>", 404);
   } catch (error) {
@@ -352,4 +381,3 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: error instanceof Error ? error.message : "Something went wrong. Please try again." }, 500);
   }
 });
-
