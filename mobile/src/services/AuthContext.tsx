@@ -13,6 +13,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const singleOwnerUser: User = { id: 'single-owner', email: 'owner@hostelhub.com', name: 'Amil Dev', role: 'OWNER' };
+const AUTH_CALLBACK_URL = 'https://amildev8547.github.io/Hostel-Management-Application/auth-callback.html';
 
 function sessionUser(session: any): User | null {
   if (!session?.user?.email) return null;
@@ -42,7 +43,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextType>(() => ({
     user, loading, usesSupabase: isSupabaseProvider,
     sendLoginLink: async (email) => {
-      const { error } = await supabase.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { emailRedirectTo: Linking.createURL('auth/callback') } });
+      const returnTo = Linking.createURL('auth/callback');
+      const emailRedirectTo = `${AUTH_CALLBACK_URL}?returnTo=${encodeURIComponent(returnTo)}`;
+      const { error } = await supabase.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { emailRedirectTo } });
       if (error) throw error;
     },
     signOut: async () => { if (isSupabaseProvider) await supabase.auth.signOut(); },
