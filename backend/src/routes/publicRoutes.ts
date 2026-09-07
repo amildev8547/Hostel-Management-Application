@@ -66,12 +66,12 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Hostel Admission Form - ${escapeHtml(branch.name)}</title>
-        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
         <style>
           :root {
-            --primary: #4F46E5;
-            --primary-hover: #4338CA;
-            --background: #F9FAFB;
+            --primary: #5B4CF0;
+            --primary-hover: #4938DB;
+            --background: #F4F7FB;
             --card-bg: #FFFFFF;
             --text-main: #1F2937;
             --text-muted: #6B7280;
@@ -80,46 +80,54 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
           }
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body {
-            font-family: 'Outfit', sans-serif;
-            background-color: var(--background);
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top left, #EDE9FE 0, transparent 32rem), var(--background);
             color: var(--text-main);
             line-height: 1.5;
             padding: 2rem 1rem;
           }
           .container {
-            max-width: 650px;
+            max-width: 760px;
             margin: 0 auto;
             background: var(--card-bg);
-            border-radius: 16px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
-            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: 0 24px 70px rgba(30, 41, 59, 0.12);
+            border: 1px solid rgba(255,255,255,0.8);
             overflow: hidden;
           }
           .header {
-            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+            background: linear-gradient(135deg, #111827 0%, #312E81 58%, #5B4CF0 100%);
             color: white;
-            padding: 2.5rem 2rem;
-            text-align: center;
+            padding: 2.5rem;
+            text-align: left;
           }
-          .header h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; }
-          .header p { font-size: 0.95rem; opacity: 0.9; }
-          form { padding: 2rem; display: grid; gap: 1.5rem; }
+          .brand-mark { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; background: rgba(255,255,255,.16); font-size: 1.4rem; margin-bottom: 1.3rem; }
+          .eyebrow { font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; opacity: .72; margin-bottom: .55rem; }
+          .header h1 { font-size: clamp(1.7rem, 5vw, 2.35rem); line-height: 1.15; font-weight: 800; margin-bottom: 0.65rem; }
+          .header p { font-size: 0.95rem; opacity: 0.82; }
+          .secure-note { display: flex; align-items: center; gap: .45rem; margin-top: 1.25rem; font-size: .78rem; opacity: .76; }
+          form { padding: 2.25rem; display: grid; gap: 1.35rem; }
           .section-title {
             font-size: 1.1rem;
             font-weight: 600;
-            color: var(--primary);
-            border-bottom: 2px solid var(--border);
-            padding-bottom: 0.5rem;
-            margin-top: 0.5rem;
+            color: #111827;
+            border: 0;
+            padding: 1.15rem 0 .25rem;
+            margin-top: .25rem;
+            display: flex;
+            align-items: center;
+            gap: .65rem;
           }
+          .section-title::before { content: ''; width: 9px; height: 28px; border-radius: 999px; background: linear-gradient(180deg, #7C3AED, #4F46E5); }
           .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
           .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
           label { font-size: 0.9rem; font-weight: 600; color: var(--text-main); }
           input, textarea, select {
             width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1px solid var(--border);
-            border-radius: 8px;
+            padding: 0.9rem 1rem;
+            border: 1px solid #D7DDEA;
+            border-radius: 12px;
+            background: #FBFCFE;
             font-family: inherit;
             font-size: 0.95rem;
             transition: all 0.2s;
@@ -127,14 +135,15 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
           }
           input:focus, textarea:focus, select:focus {
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+            background: white;
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.11);
           }
           .file-input-wrapper {
             background: #F3F4F6;
             border: 2px dashed var(--border);
             min-height: 54px;
             padding: 0.9rem 1rem;
-            border-radius: 8px;
+            border-radius: 12px;
             text-align: center;
             cursor: pointer;
             position: relative;
@@ -235,16 +244,18 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
             font-size: 0.78rem;
           }
           .btn-submit {
-            background-color: var(--primary);
+            background: linear-gradient(135deg, #5B4CF0, #7C3AED);
             color: white;
             border: none;
             padding: 1rem;
             font-size: 1rem;
             font-weight: 600;
-            border-radius: 8px;
+            border-radius: 14px;
             cursor: pointer;
             transition: background 0.2s;
             margin-top: 1rem;
+            min-height: 56px;
+            box-shadow: 0 12px 24px rgba(91,76,240,.22);
           }
           .btn-submit:hover { background-color: var(--primary-hover); }
           .btn-submit:disabled { background-color: var(--text-muted); cursor: not-allowed; }
@@ -264,14 +275,18 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
             font-size: 1.2rem; font-weight: 600; z-index: 1000;
             padding: 1rem;
           }
+          .form-footer { text-align: center; color: var(--text-muted); font-size: .76rem; padding: 0 1rem 1.5rem; }
         </style>
       </head>
       <body>
         <div class="loading-overlay" id="loadingOverlay">Processing application, please wait...</div>
         <div class="container">
           <div class="header">
+            <div class="brand-mark">🏠</div>
+            <div class="eyebrow">HostelHub admission</div>
             <h1>Hostel Admission Form</h1>
-            <p>${escapeHtml(branch.name)} - Branch Application</p>
+            <p>Apply to stay at <strong>${escapeHtml(branch.name)}</strong></p>
+            <div class="secure-note">🔒 Your information and documents are submitted securely.</div>
           </div>
           <form id="admissionForm">
             <div id="messagePanel" class="message-panel" role="status" aria-live="polite"></div>
@@ -381,6 +396,7 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
 
             <button type="submit" class="btn-submit" id="submitBtn">Pay Admission Fee & Submit</button>
           </form>
+          <div class="form-footer">HostelHub · Simple and secure hostel admission</div>
         </div>
 
         <script>
@@ -554,7 +570,12 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
                 label.title = file.name;
                 meta.textContent = file.name + ' · ' + Math.max(1, Math.round(file.size / 1024)) + ' KB';
                 const previewReader = new FileReader();
-                previewReader.onload = () => { preview.src = previewReader.result; };
+                previewReader.onload = () => {
+                  preview.src = previewReader.result;
+                  preview.style.display = 'block';
+                  const placeholder = card.querySelector('.upload-placeholder');
+                  if (placeholder) placeholder.style.display = 'none';
+                };
                 previewReader.readAsDataURL(file);
                 wrapper.classList.add('selected');
                 card.classList.add('has-file');
