@@ -143,16 +143,22 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
             justify-content: center;
           }
           .file-input-wrapper input[type="file"] {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            opacity: 0; cursor: pointer;
+            position: static;
+            width: 100%;
+            height: auto;
+            opacity: 1;
+            cursor: pointer;
+            padding: 0.55rem;
+            margin-top: 0.45rem;
+            background: white;
+            color: var(--text-main);
           }
           .file-input-wrapper .file-label {
             display: block;
             width: 100%;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
+            white-space: normal;
             font-size: 0.85rem; color: var(--text-muted);
           }
           .file-input-wrapper.selected {
@@ -547,10 +553,9 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
                 label.textContent = 'Change image';
                 label.title = file.name;
                 meta.textContent = file.name + ' · ' + Math.max(1, Math.round(file.size / 1024)) + ' KB';
-                if (preview.dataset.objectUrl) URL.revokeObjectURL(preview.dataset.objectUrl);
-                const objectUrl = URL.createObjectURL(file);
-                preview.dataset.objectUrl = objectUrl;
-                preview.src = objectUrl;
+                const previewReader = new FileReader();
+                previewReader.onload = () => { preview.src = previewReader.result; };
+                previewReader.readAsDataURL(file);
                 wrapper.classList.add('selected');
                 card.classList.add('has-file');
               } else {
