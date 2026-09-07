@@ -44,14 +44,16 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
     // real room pricing instead of a hardcoded flat number.
     const rooms = await prisma.room.findMany({
       where: { branchId },
-      select: { roomType: true, admissionFee: true },
+      select: { roomType: true, admissionFee: true, monthlyRent: true },
       orderBy: { admissionFee: 'asc' },
     });
     const roomFeeMap: Record<string, number> = {};
+    const roomRentMap: Record<string, number> = {};
     let cheapestOverall = 1500;
     for (const room of rooms) {
       if (!(room.roomType in roomFeeMap)) {
         roomFeeMap[room.roomType] = room.admissionFee;
+        roomRentMap[room.roomType] = room.monthlyRent;
       }
       cheapestOverall = Math.min(cheapestOverall, room.admissionFee);
     }
@@ -158,6 +160,43 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
             border-color: var(--primary);
           }
           .file-input-wrapper.selected .file-label { color: #3730A3; font-weight: 600; }
+          .upload-card {
+            display: grid;
+            grid-template-columns: 88px 1fr;
+            gap: 1rem;
+            align-items: center;
+            padding: 0.85rem;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #FAFAFF;
+          }
+          .upload-preview {
+            width: 88px;
+            height: 88px;
+            border-radius: 10px;
+            object-fit: cover;
+            background: #EEF2FF;
+            border: 1px solid #C7D2FE;
+            display: none;
+          }
+          .upload-placeholder {
+            width: 88px;
+            height: 88px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #EEF2FF;
+            color: #4F46E5;
+            font-size: 1.65rem;
+          }
+          .upload-card.has-file .upload-preview { display: block; }
+          .upload-card.has-file .upload-placeholder { display: none; }
+          .file-meta { color: var(--text-muted); font-size: 0.78rem; margin-top: 0.35rem; overflow-wrap: anywhere; }
+          .upload-title { font-size: 0.92rem; font-weight: 700; margin-bottom: 0.45rem; }
+          .summary-card { background: #F8FAFC; padding: 1rem; border-radius: 12px; border: 1px solid var(--border); }
+          .summary-row { display: flex; justify-content: space-between; gap: 1rem; padding: 0.3rem 0; }
+          .summary-row strong { text-align: right; }
           .message-panel {
             display: none;
             padding: 1rem;
@@ -209,6 +248,8 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
             .container { border: 0; border-radius: 0; box-shadow: none; }
             .header { padding: 1.75rem 1.25rem; }
             form { padding: 1.25rem; gap: 1.25rem; }
+            .upload-card { grid-template-columns: 72px 1fr; }
+            .upload-preview, .upload-placeholder { width: 72px; height: 72px; }
           }
           .loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -287,11 +328,7 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
               <div class="form-group">
                 <label for="preferredRoomType">Preferred Room Type *</label>
                 <select id="preferredRoomType" required ${booking ? 'disabled' : ''}>
-                  <option value="2 Share" ${booking?.room.roomType === '2 Share' ? 'selected' : ''}>2 Sharing</option>
-                  <option value="3 Share" ${booking?.room.roomType === '3 Share' ? 'selected' : ''}>3 Sharing</option>
-                  <option value="4 Share" ${booking?.room.roomType === '4 Share' ? 'selected' : ''}>4 Sharing</option>
-                  <option value="5 Share" ${booking?.room.roomType === '5 Share' ? 'selected' : ''}>5 Sharing</option>
-                  <option value="Custom" ${booking?.room.roomType === 'Custom' ? 'selected' : ''}>Custom Room</option>
+                  ${Object.keys(roomFeeMap).map((type) => `<option value="${escapeHtml(type)}" ${booking?.room.roomType === type ? 'selected' : ''}>${escapeHtml(type.replace('Share', 'people'))} · ₹${escapeHtml(roomRentMap[type])}/month</option>`).join('')}
                 </select>
               </div>
               <div class="form-group">
@@ -307,27 +344,21 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
             <h2 class="section-title">Required Documents</h2>
             <div class="form-group">
               <label>Profile Photo *</label>
-              <div class="file-input-wrapper" id="profileWrapper">
-                <span class="file-label" id="profileLabel">Choose Profile Image</span>
-                <input type="file" id="profilePhoto" accept="image/*" required>
+              <div class="upload-card" id="profileCard">
+                <div><div class="upload-placeholder">👤</div><img class="upload-preview" id="profilePreview" alt="Selected profile photo preview"></div>
+                <div><div class="upload-title">Your recent photo</div><div class="file-input-wrapper" id="profileWrapper"><span class="file-label" id="profileLabel">Tap to choose photo</span><input type="file" id="profilePhoto" accept="image/jpeg,image/png,image/webp" required></div><div class="file-meta" id="profileMeta">No photo selected</div></div>
               </div>
-              <span class="help-text">Use JPG or PNG. Large camera photos will be compressed before upload.</span>
+              <span class="help-text">Choose a clear face photo. JPG, PNG or WEBP files are accepted.</span>
             </div>
             <div class="form-row">
               <div class="form-group">
                 <label>Aadhaar Card Front *</label>
-                <div class="file-input-wrapper" id="aadhaarFrontWrapper">
-                  <span class="file-label" id="aadhaarFrontLabel">Aadhaar Front Image</span>
-                  <input type="file" id="aadhaarFront" accept="image/*" required>
-                </div>
+                <div class="upload-card" id="aadhaarFrontCard"><div><div class="upload-placeholder">🪪</div><img class="upload-preview" id="aadhaarFrontPreview" alt="Aadhaar front preview"></div><div><div class="file-input-wrapper" id="aadhaarFrontWrapper"><span class="file-label" id="aadhaarFrontLabel">Tap to choose front</span><input type="file" id="aadhaarFront" accept="image/jpeg,image/png,image/webp" required></div><div class="file-meta" id="aadhaarFrontMeta">No image selected</div></div></div>
                 <span class="help-text">Upload a clear front-side image.</span>
               </div>
               <div class="form-group">
                 <label>Aadhaar Card Back *</label>
-                <div class="file-input-wrapper" id="aadhaarBackWrapper">
-                  <span class="file-label" id="aadhaarBackLabel">Aadhaar Back Image</span>
-                  <input type="file" id="aadhaarBack" accept="image/*" required>
-                </div>
+                <div class="upload-card" id="aadhaarBackCard"><div><div class="upload-placeholder">🪪</div><img class="upload-preview" id="aadhaarBackPreview" alt="Aadhaar back preview"></div><div><div class="file-input-wrapper" id="aadhaarBackWrapper"><span class="file-label" id="aadhaarBackLabel">Tap to choose back</span><input type="file" id="aadhaarBack" accept="image/jpeg,image/png,image/webp" required></div><div class="file-meta" id="aadhaarBackMeta">No image selected</div></div></div>
                 <span class="help-text">Upload a clear back-side image.</span>
               </div>
             </div>
@@ -337,10 +368,9 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
               <textarea id="notes" rows="2" placeholder="Any special requests or instructions">${escapeHtml(booking?.notes)}</textarea>
             </div>
 
-            <div class="form-group" style="background-color: #F9FAFB; padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
-              <p style="font-size: 0.85rem; color: var(--text-muted); text-align: center;">
-                Admission Fee to Pay: <strong style="color: var(--primary); font-size: 1.1rem;" id="feeDisplay">₹${escapeHtml(cheapestOverall)}</strong>
-              </p>
+            <div class="summary-card">
+              <div class="summary-row"><span>Monthly room rent</span><strong id="rentDisplay">₹0 per month</strong></div>
+              <div class="summary-row"><span>One-time admission fee</span><strong style="color: var(--primary);" id="feeDisplay">₹${escapeHtml(cheapestOverall)}</strong></div>
             </div>
 
             <button type="submit" class="btn-submit" id="submitBtn">Pay Admission Fee & Submit</button>
@@ -465,13 +495,17 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
           // Update the displayed admission fee to match the selected room type's real pricing.
           // This is for display only — the backend always recomputes the authoritative amount itself.
           const roomFeeMap = ${JSON.stringify(roomFeeMap).replace(/</g, '\\u003c')};
+          const roomRentMap = ${JSON.stringify(roomRentMap).replace(/</g, '\\u003c')};
           const cheapestOverallFee = ${JSON.stringify(cheapestOverall)};
           const feeDisplay = document.getElementById('feeDisplay');
+          const rentDisplay = document.getElementById('rentDisplay');
           const preferredRoomTypeInput = document.getElementById('preferredRoomType');
 
           function updateFeeDisplay() {
             const fee = roomFeeMap[preferredRoomTypeInput.value] ?? cheapestOverallFee;
+            const rent = roomRentMap[preferredRoomTypeInput.value] ?? 0;
             feeDisplay.innerText = '₹' + fee;
+            rentDisplay.innerText = '₹' + rent + ' per month';
           }
           preferredRoomTypeInput.addEventListener('change', updateFeeDisplay);
           updateFeeDisplay();
@@ -496,23 +530,36 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
 
           // File Label updates
           const fileInputs = [
-            { id: 'profilePhoto', wrapperId: 'profileWrapper', emptyText: 'Choose Profile Image' },
-            { id: 'aadhaarFront', wrapperId: 'aadhaarFrontWrapper', emptyText: 'Aadhaar Front Image' },
-            { id: 'aadhaarBack', wrapperId: 'aadhaarBackWrapper', emptyText: 'Aadhaar Back Image' },
+            { id: 'profilePhoto', wrapperId: 'profileWrapper', cardId: 'profileCard', previewId: 'profilePreview', metaId: 'profileMeta', emptyText: 'Tap to choose photo' },
+            { id: 'aadhaarFront', wrapperId: 'aadhaarFrontWrapper', cardId: 'aadhaarFrontCard', previewId: 'aadhaarFrontPreview', metaId: 'aadhaarFrontMeta', emptyText: 'Tap to choose front' },
+            { id: 'aadhaarBack', wrapperId: 'aadhaarBackWrapper', cardId: 'aadhaarBackCard', previewId: 'aadhaarBackPreview', metaId: 'aadhaarBackMeta', emptyText: 'Tap to choose back' },
           ];
-          fileInputs.forEach(({ id, wrapperId, emptyText }) => {
+          fileInputs.forEach(({ id, wrapperId, cardId, previewId, metaId, emptyText }) => {
             const el = document.getElementById(id);
             const wrapper = document.getElementById(wrapperId);
+            const card = document.getElementById(cardId);
+            const preview = document.getElementById(previewId);
+            const meta = document.getElementById(metaId);
             const label = document.getElementById(id + 'Label');
             el.addEventListener('change', () => {
               if (el.files && el.files[0]) {
-                label.textContent = 'Selected: ' + el.files[0].name;
-                label.title = el.files[0].name;
+                const file = el.files[0];
+                label.textContent = 'Change image';
+                label.title = file.name;
+                meta.textContent = file.name + ' · ' + Math.max(1, Math.round(file.size / 1024)) + ' KB';
+                if (preview.dataset.objectUrl) URL.revokeObjectURL(preview.dataset.objectUrl);
+                const objectUrl = URL.createObjectURL(file);
+                preview.dataset.objectUrl = objectUrl;
+                preview.src = objectUrl;
                 wrapper.classList.add('selected');
+                card.classList.add('has-file');
               } else {
                 label.textContent = emptyText;
                 label.removeAttribute('title');
+                meta.textContent = id === 'profilePhoto' ? 'No photo selected' : 'No image selected';
+                preview.removeAttribute('src');
                 wrapper.classList.remove('selected');
+                card.classList.remove('has-file');
               }
             });
           });
