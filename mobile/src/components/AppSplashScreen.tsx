@@ -48,7 +48,7 @@ export default function AppSplashScreen({ onFinish }: AppSplashScreenProps) {
       }),
       Animated.timing(progress, {
         toValue: 1,
-        duration: 1150,
+        duration: 2450,
         easing: Easing.inOut(Easing.cubic),
         useNativeDriver: true,
       }),
@@ -57,13 +57,13 @@ export default function AppSplashScreen({ onFinish }: AppSplashScreenProps) {
     const finishTimer = setTimeout(() => {
       Animated.timing(exitOpacity, {
         toValue: 0,
-        duration: 220,
+        duration: 300,
         easing: Easing.inOut(Easing.quad),
         useNativeDriver: true,
       }).start(({ finished }) => {
         if (finished) onFinish();
       });
-    }, 1200);
+    }, 2500);
 
     return () => clearTimeout(finishTimer);
   }, [entrance, exitOpacity, onFinish, progress]);
