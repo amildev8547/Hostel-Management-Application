@@ -367,7 +367,7 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
               <label>Profile Photo *</label>
               <div class="upload-card" id="profileCard">
                 <div><div class="upload-placeholder">👤</div><img class="upload-preview" id="profilePreview" alt="Selected profile photo preview"></div>
-                <div><div class="upload-title">Your recent photo</div><div class="file-input-wrapper" id="profileWrapper"><span class="file-label" id="profileLabel">Tap to choose photo</span><input type="file" id="profilePhoto" accept="image/jpeg,image/png,image/webp" required></div><div class="file-meta" id="profileMeta">No photo selected</div></div>
+                <div><div class="upload-title">Your recent photo</div><div class="file-input-wrapper" id="profileWrapper"><span class="file-label" id="profilePhotoLabel">Tap to choose photo</span><input type="file" id="profilePhoto" accept="image/jpeg,image/png,image/webp" required></div><div class="file-meta" id="profileMeta">No photo selected</div></div>
               </div>
               <span class="help-text">Choose a clear face photo. JPG, PNG or WEBP files are accepted.</span>
             </div>
