@@ -86,14 +86,25 @@ export async function calculateBranchMetrics(branchId: string): Promise<BranchMe
   // Payments calculations
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  await prisma.payment.updateMany({
+    where: {
+      branchId,
+      paymentType: 'RENT',
+      status: 'PENDING',
+      dueDate: { lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) },
+    },
+    data: { status: 'OVERDUE' },
+  });
 
   const payments = await prisma.payment.findMany({
     where: {
       branchId,
-      createdAt: {
+      paymentType: 'RENT',
+      dueDate: {
         gte: startOfMonth,
-        lte: endOfMonth,
+        lt: nextMonth,
       },
     },
   });

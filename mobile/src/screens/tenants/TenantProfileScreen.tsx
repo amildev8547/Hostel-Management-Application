@@ -19,6 +19,9 @@ interface TenantProfileScreenProps {
   navigation: TenantProfileNavigationProp;
 }
 
+const formatRentMonth = (value: string | Date) =>
+  new Date(value).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
 export default function TenantProfileScreen({ route, navigation }: TenantProfileScreenProps) {
   const { tenantId } = route.params;
   const theme = useTheme();
@@ -177,7 +180,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
       const message = [
         `Hello ${tenant.name},`,
         ``,
-        `Your rent for *${branchName}*${roomInfo ? ` (${roomInfo})` : ''} is ready.`,
+        `Your advance rent for *${formatRentMonth(pay.dueDate)}* at *${branchName}*${roomInfo ? ` (${roomInfo})` : ''} is ready.`,
         ``,
         `💰 *Amount: ₹${pay.amount}*`,
         `📅 Due Date: ${new Date(pay.dueDate).toLocaleDateString('en-IN')}`,
@@ -444,8 +447,13 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
                 <View style={styles.paymentRow}>
                   <View style={{ flex: 1, marginRight: 8 }}>
                     <Text style={{ fontWeight: '700', color: '#334155' }}>
-                      ₹{pay.amount} ({pay.paymentType})
+                      ₹{pay.amount} ({pay.paymentType === 'RENT' ? 'Advance rent' : 'Admission fee'})
                     </Text>
+                    {pay.paymentType === 'RENT' && (
+                      <Text style={{ fontSize: 11, color: '#475569', marginTop: 2, fontWeight: '600' }}>
+                        For {formatRentMonth(pay.dueDate)}
+                      </Text>
+                    )}
                     <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
                       Due: {new Date(pay.dueDate).toLocaleDateString()}
                     </Text>

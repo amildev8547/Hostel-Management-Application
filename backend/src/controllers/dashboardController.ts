@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
+import { getCalendarMonthRange, markOverdueRentInvoices } from '../utils/rentBilling';
 
 export async function getHomeDashboard(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
@@ -43,17 +44,18 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
 
     // 2. Fetch payments for current month to compute collection metrics
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const { start: startOfMonth, nextStart } = getCalendarMonthRange(now);
 
     const branchIds = branches.map((b) => b.id);
 
+    await markOverdueRentInvoices(userId);
     const payments = await prisma.payment.findMany({
       where: {
         branchId: { in: branchIds },
-        createdAt: {
+        paymentType: 'RENT',
+        dueDate: {
           gte: startOfMonth,
-          lte: endOfMonth,
+          lt: nextStart,
         },
       },
     });

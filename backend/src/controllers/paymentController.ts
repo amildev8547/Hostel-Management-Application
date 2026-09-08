@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
 import { buildUpiPaymentUrl, getSettingValue } from '../utils/upi';
+import { ensureCurrentMonthRentInvoice, getCalendarMonthRange, markOverdueRentInvoices } from '../utils/rentBilling';
 
 export async function getPayments(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
@@ -23,6 +24,7 @@ export async function getPayments(req: AuthenticatedRequest, res: Response) {
   }
 
   try {
+    await markOverdueRentInvoices(userId);
     const payments = await prisma.payment.findMany({
       where: {
         branch: { userId },
@@ -64,11 +66,7 @@ export async function generateMonthlyRentDues(req: AuthenticatedRequest, res: Re
 
   try {
     const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth(); // 0-indexed
-
-    const startOfMonth = new Date(currentYear, currentMonth, 1);
-    const endOfMonth = new Date(currentYear, currentMonth + 1, 0);
+    const { label: currentMonthLabel } = getCalendarMonthRange(now);
 
     // Fetch all active tenants owned by user
     const tenants = await prisma.tenant.findMany({
@@ -89,44 +87,24 @@ export async function generateMonthlyRentDues(req: AuthenticatedRequest, res: Re
     const skippedTenants: string[] = [];
 
     for (const tenant of tenants) {
-      // Check if rent invoice already exists for this tenant in the current calendar month
-      const existingPayment = await prisma.payment.findFirst({
-        where: {
-          tenantId: tenant.id,
-          paymentType: 'RENT',
-          createdAt: {
-            gte: startOfMonth,
-            lte: endOfMonth,
-          },
-        },
+      const result = await ensureCurrentMonthRentInvoice({
+        tenantId: tenant.id,
+        branchId: tenant.room.branchId,
+        monthlyRent: tenant.room.monthlyRent,
+        rentDueDay: tenant.room.branch.rentDueDay || 5,
+        now,
       });
 
-      if (existingPayment) {
+      if (!result.created) {
         skippedTenants.push(tenant.name);
         continue;
       }
-
-      // Compute due date based on branch config
-      const dueDay = tenant.room.branch.rentDueDay || 5;
-      const dueDate = new Date(currentYear, currentMonth, dueDay);
-
-      // Create payment
-      await prisma.payment.create({
-        data: {
-          amount: tenant.room.monthlyRent,
-          status: 'PENDING',
-          paymentType: 'RENT',
-          dueDate,
-          tenantId: tenant.id,
-          branchId: tenant.room.branchId,
-        },
-      });
 
       generatedCount++;
     }
 
     res.json({
-      message: `Rent dues generation completed successfully.`,
+      message: `${currentMonthLabel} advance rent bills are ready. Created ${generatedCount}; already available for ${skippedTenants.length}.`,
       generated: generatedCount,
       skippedCount: skippedTenants.length,
       skippedList: skippedTenants,
@@ -302,9 +280,10 @@ export async function sendPaymentReminder(req: AuthenticatedRequest, res: Respon
     const payUrl = payment.paymentLinkUrl || `${process.env.BACKEND_URL || 'http://localhost:5000'}/pay/${payment.id}`;
 
     // Format WhatsApp reminder message
+    const rentMonth = payment.dueDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
     const reminderMessage = `Hello ${payment.tenant.name},
 
-Your rent for this month is due.
+Your advance rent for ${rentMonth} is due.
 Amount: ₹${payment.amount}
 Pay Here: ${payUrl}`;
 
@@ -357,7 +336,6 @@ export async function processPaymentSuccess(paymentId: string, transactionId: st
 
   // 2. If it's Rent: Update tenant paid fields
   if (payment.paymentType === 'RENT' && payment.tenantId) {
-    const nextDue = new Date(now.getFullYear(), now.getMonth() + 1, payment.branch.rentDueDay || 5);
     await prisma.tenant.update({
       where: { id: payment.tenantId },
       data: {
@@ -370,7 +348,7 @@ export async function processPaymentSuccess(paymentId: string, transactionId: st
     await prisma.notification.create({
       data: {
         title: 'Rent Payment Received',
-        message: `Rent payment of ₹${payment.amount} received from ${payment.tenant?.name} (Room ${payment.tenant?.room.roomNumber}).`,
+        message: `Advance rent of ₹${payment.amount} for ${payment.dueDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} received from ${payment.tenant?.name} (Room ${payment.tenant?.room.roomNumber}).`,
         type: 'RENT_PAYMENT_RECEIVED',
         userId: payment.branch.userId,
       },

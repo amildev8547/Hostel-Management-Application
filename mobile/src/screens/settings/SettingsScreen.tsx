@@ -96,7 +96,7 @@ export default function SettingsScreen() {
           <List.Item
             title="Create monthly rent bills automatically"
             titleNumberOfLines={2}
-            description="On the first day of every month, prepare rent bills for everyone"
+            description="Prepare the current month's advance rent bills for everyone"
             left={(props) => <List.Icon {...props} icon="calendar-check" />}
             right={() => (
               <Switch

@@ -19,6 +19,9 @@ interface RoomDetailsScreenProps {
   navigation: RoomDetailsNavigationProp;
 }
 
+const formatRentMonth = (value: string | Date) =>
+  new Date(value).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
 export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScreenProps) {
   const { roomId } = route.params;
   const theme = useTheme();
@@ -157,8 +160,13 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
                 <View style={styles.paymentRow}>
                   <View>
                     <Text style={{ fontWeight: '700', color: '#334155' }}>
-                      ₹{pay.amount} ({pay.paymentType})
+                      ₹{pay.amount} ({pay.paymentType === 'RENT' ? 'Advance rent' : 'Admission fee'})
                     </Text>
+                    {pay.paymentType === 'RENT' && (
+                      <Text style={{ fontSize: 11, color: '#475569', marginTop: 2, fontWeight: '600' }}>
+                        For {formatRentMonth(pay.dueDate)}
+                      </Text>
+                    )}
                     <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
                       Pay by: {new Date(pay.dueDate).toLocaleDateString()}
                     </Text>

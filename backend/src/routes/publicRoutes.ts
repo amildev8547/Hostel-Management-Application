@@ -454,6 +454,7 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
 
             <div class="summary-card">
               <div class="summary-row"><span>Monthly room rent</span><strong id="rentDisplay">₹0 per month</strong></div>
+              <div class="summary-row"><span>Rent payment timing</span><strong>Current month, paid in advance after approval</strong></div>
               <div class="summary-row"><span>One-time admission fee</span><strong style="color: var(--primary);" id="feeDisplay">₹${escapeHtml(cheapestOverall)}</strong></div>
             </div>
 
@@ -780,7 +781,10 @@ router.get('/pay/:paymentId', async (req: Request, res: Response) => {
     const ownerWhatsapp = onlyDigits(settingValue(settings, 'payment_whatsapp_number'));
     const payerName = payment.tenant?.name || payment.admissionApplication?.name || 'Applicant';
     const roomLabel = payment.tenant?.room?.roomNumber ? `Room ${payment.tenant.room.roomNumber}` : 'Admission Application';
-    const paymentNote = `HostelHub ${payment.paymentType} ${payment.id}`;
+    const isRentPayment = payment.paymentType === 'RENT';
+    const rentMonthLabel = payment.dueDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+    const paymentDescription = isRentPayment ? `${rentMonthLabel} advance rent` : 'One-time admission fee';
+    const paymentNote = isRentPayment ? `HostelHub advance rent ${rentMonthLabel}` : `HostelHub admission fee ${payment.id}`;
     const upiUrl = upiId
       ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(receiverName)}&am=${encodeURIComponent(String(payment.amount))}&cu=INR&tn=${encodeURIComponent(paymentNote)}`
       : '';
@@ -922,7 +926,7 @@ router.get('/pay/:paymentId', async (req: Request, res: Response) => {
           <div class="content">
             <div class="amount-section">
               <div class="amount">Rs ${escapeHtml(payment.amount)}</div>
-              <div class="desc">${escapeHtml(payment.paymentType)} payment due</div>
+              <div class="desc">${escapeHtml(paymentDescription)}</div>
             </div>
 
             <div class="detail-row">
@@ -933,6 +937,12 @@ router.get('/pay/:paymentId', async (req: Request, res: Response) => {
               <span class="label">For</span>
               <span class="val">${escapeHtml(roomLabel)}</span>
             </div>
+            ${isRentPayment ? `
+              <div class="detail-row">
+                <span class="label">Rent month</span>
+                <span class="val">${escapeHtml(rentMonthLabel)} (paid in advance)</span>
+              </div>
+            ` : ''}
             <div class="detail-row">
               <span class="label">Invoice ID</span>
               <span class="val" style="font-size: 0.75rem;">${escapeHtml(payment.id)}</span>

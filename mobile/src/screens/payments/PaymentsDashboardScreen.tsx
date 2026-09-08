@@ -24,6 +24,9 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+const formatRentMonth = (value: string | Date) =>
+  new Date(value).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
 export default function PaymentsDashboardScreen({ route, navigation }: PaymentsDashboardScreenProps) {
   const { branchId } = route.params || {};
   const theme = useTheme();
@@ -96,6 +99,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
         params: {
           branchId,
           status: statusMap[activeSegment],
+          paymentType: 'RENT',
           month: selectedMonth + 1,
           year: selectedYear,
         },
@@ -109,7 +113,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
     queryKey: ['allPaymentsSummary', branchId, selectedMonth, selectedYear],
     queryFn: async () => {
       const response = await apiClient.get('/payments', {
-        params: { branchId, month: selectedMonth + 1, year: selectedYear },
+        params: { branchId, paymentType: 'RENT', month: selectedMonth + 1, year: selectedYear },
       });
       return response.data;
     },
@@ -154,7 +158,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
     const message = [
       `Hello ${tenantName},`,
       ``,
-      `✅ We have received your payment for *${branchName}*${roomInfo ? ` (${roomInfo})` : ''}.`,
+      `✅ We have received your advance rent for *${formatRentMonth(pay.dueDate)}* at *${branchName}*${roomInfo ? ` (${roomInfo})` : ''}.`,
       ``,
       `💰 *Amount Paid: ₹${pay.amount}*`,
       `🧾 Payment Method: ${methodLabel}`,
@@ -256,7 +260,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
       const message = [
         `Hello ${tenantName},`,
         ``,
-        `Your rent for *${branchName}*${roomInfo ? ` (${roomInfo})` : ''} is ready.`,
+        `Your advance rent for *${formatRentMonth(payment.dueDate)}* at *${branchName}*${roomInfo ? ` (${roomInfo})` : ''} is ready.`,
         ``,
         `💰 *Amount: ₹${payment.amount}*`,
         `📅 Due Date: ${new Date(payment.dueDate).toLocaleDateString('en-IN')}`,
@@ -348,6 +352,14 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
         </TouchableOpacity>
       </View>
 
+      <Surface style={styles.advanceNotice} elevation={0}>
+        <Icon name="calendar-check-outline" size={24} color={theme.colors.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.advanceNoticeTitle}>Rent is collected in advance</Text>
+          <Text style={styles.advanceNoticeText}>The amounts below are for {MONTH_NAMES[selectedMonth]} {selectedYear}.</Text>
+        </View>
+      </Surface>
+
       {/* 2. Operations trigger bar */}
       <View style={styles.operationsBar}>
         <Button
@@ -358,7 +370,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
           loading={isProcessing}
           style={{ flex: 1 }}
         >
-          Create this month's rent bills
+          Create this month's advance rent bills
         </Button>
       </View>
 
@@ -414,7 +426,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
                           ₹{pay.amount}
                         </Text>
                         <Text variant="bodySmall" style={{ color: '#64748B', marginTop: 4 }}>
-                          {pay.paymentType}
+                          {pay.paymentType === 'RENT' ? `Advance rent · ${formatRentMonth(pay.dueDate)}` : 'Admission fee'}
                         </Text>
                         {pay.discountAmount > 0 && (
                           <Text variant="bodySmall" style={{ color: (theme.colors as any).success, fontSize: 11 }}>
@@ -687,6 +699,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 8,
   },
+  advanceNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  advanceNoticeTitle: { color: '#312E81', fontWeight: '800', fontSize: 13 },
+  advanceNoticeText: { color: '#475569', fontSize: 12, marginTop: 2 },
   segmentWrapper: {
     padding: 16,
   },

@@ -59,7 +59,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
     const proceed = async () => {
       setIsProcessing(true);
       try {
-        await apiClient.post(`/admissions/${applicationId}/review`, {
+        const response = await apiClient.post(`/admissions/${applicationId}/review`, {
           status,
           roomId: status === 'APPROVED' ? selectedRoomId : undefined,
         });
@@ -69,7 +69,11 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
           roomId: selectedRoomId,
         });
         await queryClient.invalidateQueries({ queryKey: ['bookings'] });
-        showAlert(status === 'APPROVED' ? 'Application accepted and room assigned.' : 'Application declined.', 'Success', () => navigation.goBack());
+        showAlert(
+          response.data?.message || (status === 'APPROVED' ? 'Application accepted and room assigned.' : 'Application declined.'),
+          'Success',
+          () => navigation.goBack()
+        );
       } catch (err: any) {
         console.error(err);
         showAlert(err.response?.data?.error || 'Failed to complete review');

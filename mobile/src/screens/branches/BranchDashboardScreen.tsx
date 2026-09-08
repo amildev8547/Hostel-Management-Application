@@ -231,7 +231,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
               <ActionRow icon="share-variant" title="Share application form" detail="Send the form using another app" onPress={handleShareAdmissionLink} />
               <ActionRow icon="link-variant" title="Copy application link" detail="Copy the form address" onPress={handleCopyLink} />
               <ActionRow icon="plus" title="Add a room" detail="Create another room in this branch" onPress={() => navigation.navigate('RoomForm', { branchId })} />
-              <ActionRow icon="cash-multiple" title="Rent payments" detail="Check received and pending rent" onPress={() => navigation.navigate('PaymentsDashboard', { branchId })} />
+              <ActionRow icon="cash-multiple" title="Rent payments" detail="Check the current month's advance rent" onPress={() => navigation.navigate('PaymentsDashboard', { branchId })} />
               <ActionRow icon="pencil" title="Edit branch" detail="Change branch information" onPress={() => navigation.navigate('BranchForm', { branchId })} last />
             </Surface>
           </>

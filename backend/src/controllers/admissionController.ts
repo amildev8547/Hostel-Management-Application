@@ -4,6 +4,7 @@ import prisma from '../config/db';
 import { uploadFile } from '../services/cloudinary';
 import { updateRoomOccupancyStatus } from '../utils/occupancy';
 import { buildUpiPaymentUrl, getSettingValue } from '../utils/upi';
+import { ensureCurrentMonthRentInvoice, getCalendarMonthRange } from '../utils/rentBilling';
 
 // Public endpoint: Submit application
 export async function submitAdmissionApplication(req: Request, res: Response) {
@@ -363,6 +364,21 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
       // 5. Update Room occupancy
       await updateRoomOccupancyStatus(selectedRoomId);
 
+      // Prepare this resident's advance rent bill for the current month immediately.
+      // This is idempotent, so the monthly bulk action will not create a duplicate.
+      let rentInvoiceCreated = false;
+      try {
+        const rentInvoice = await ensureCurrentMonthRentInvoice({
+          tenantId: tenant.id,
+          branchId: room.branchId,
+          monthlyRent: room.monthlyRent,
+          rentDueDay: application.branch.rentDueDay || 5,
+        });
+        rentInvoiceCreated = rentInvoice.created;
+      } catch (rentError) {
+        console.error('Create current month advance rent invoice error:', rentError);
+      }
+
       // 6. Notify Owner
       await prisma.notification.create({
         data: {
@@ -373,7 +389,13 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
         },
       });
 
-      return res.json({ message: 'Application approved. Tenant active.', tenant });
+      const rentMonth = getCalendarMonthRange().label;
+      return res.json({
+        message: rentInvoiceCreated
+          ? `Application approved. Resident is active and the ${rentMonth} advance rent bill is ready.`
+          : 'Application approved. Resident is active.',
+        tenant,
+      });
     } else {
       // status === REJECTED
       await prisma.admissionApplication.update({

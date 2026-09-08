@@ -62,14 +62,15 @@ export async function getBranches(req: AuthenticatedRequest, res: Response) {
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const branchIds = branches.map((branch) => branch.id);
     const unpaidPayments = branchIds.length
       ? await prisma.payment.findMany({
           where: {
             branchId: { in: branchIds },
+            paymentType: 'RENT',
             status: { in: ['PENDING', 'OVERDUE'] },
-            createdAt: { gte: startOfMonth, lte: endOfMonth },
+            dueDate: { gte: startOfMonth, lt: nextMonth },
           },
         })
       : [];
