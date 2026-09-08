@@ -66,6 +66,7 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Hostel Admission Form - ${escapeHtml(branch.name)}</title>
+        <link rel="icon" type="image/png" href="/brand/hostelhub-mark.png">
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
         <style>
           :root {
@@ -103,7 +104,8 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
             padding: 2.5rem;
             text-align: left;
           }
-          .brand-mark { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; background: rgba(255,255,255,.16); font-size: 1.4rem; margin-bottom: 1.3rem; }
+          .brand-mark { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 15px; background: #FFFFFF; box-shadow: 0 10px 26px rgba(15,23,42,.2); margin-bottom: 1.3rem; }
+          .brand-mark img { width: 44px; height: 44px; object-fit: contain; display: block; }
           .eyebrow { font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; opacity: .72; margin-bottom: .55rem; }
           .header h1 { font-size: clamp(1.7rem, 5vw, 2.35rem); line-height: 1.15; font-weight: 800; margin-bottom: 0.65rem; }
           .header p { font-size: 0.95rem; opacity: 0.82; }
@@ -339,7 +341,7 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
         <div class="loading-overlay" id="loadingOverlay">Processing application, please wait...</div>
         <div class="container">
           <div class="header">
-            <div class="brand-mark">🏠</div>
+            <div class="brand-mark"><img src="/brand/hostelhub-mark.png" alt="HostelHub"></div>
             <div class="eyebrow">HostelHub admission</div>
             <h1>Hostel Admission Form</h1>
             <p>Apply to stay at <strong>${escapeHtml(branch.name)}</strong></p>
@@ -797,6 +799,7 @@ router.get('/pay/:paymentId', async (req: Request, res: Response) => {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Manual UPI Payment - HostelHub</title>
+        <link rel="icon" type="image/png" href="/brand/hostelhub-mark.png">
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
         <style>
           :root {
@@ -835,6 +838,8 @@ router.get('/pay/:paymentId', async (req: Request, res: Response) => {
             color: white;
             padding: 1.5rem;
           }
+          .payment-brand { display: flex; align-items: center; gap: .7rem; margin-bottom: 1rem; color: #E0E7FF; font-size: .82rem; font-weight: 700; letter-spacing: .03em; }
+          .payment-brand img { width: 34px; height: 34px; padding: 3px; border-radius: 9px; background: #FFFFFF; object-fit: contain; }
           .header h1 { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.35rem; }
           .header p { margin: 0; color: #CBD5E1; font-size: 0.9rem; }
           .content { padding: 1.5rem; }
@@ -920,6 +925,7 @@ router.get('/pay/:paymentId', async (req: Request, res: Response) => {
       <body>
         <div class="payment-card">
           <div class="header">
+            <div class="payment-brand"><img src="/brand/hostelhub-mark.png" alt=""><span>HostelHub secure payment</span></div>
             <h1>Pay by UPI</h1>
             <p>${escapeHtml(payment.branch.name)}</p>
           </div>

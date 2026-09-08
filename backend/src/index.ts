@@ -30,6 +30,7 @@ app.use(express.urlencoded({ limit: '25mb', extended: true }));
 
 // Serve local uploads folder statically
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
+app.use('/brand', express.static(path.join(__dirname, '../public/brand')));
 
 // Mount Public HTML routers
 app.use('/', publicRoutes);
