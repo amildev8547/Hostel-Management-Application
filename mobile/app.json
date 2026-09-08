@@ -13,7 +13,7 @@
       "package": "com.hostelhub.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#F5F3FF"
       }
     },
     "web": {
@@ -28,8 +28,9 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash.png",
+          "imageWidth": 150,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#F5F3FF"
         }
       ],
       "@react-native-community/datetimepicker"
