@@ -79,12 +79,14 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
             --success: #10B981;
           }
           * { box-sizing: border-box; margin: 0; padding: 0; }
+          html { -webkit-text-size-adjust: 100%; }
           body {
             font-family: 'Inter', sans-serif;
             background: radial-gradient(circle at top left, #EDE9FE 0, transparent 32rem), var(--background);
             color: var(--text-main);
             line-height: 1.5;
             padding: 2rem 1rem;
+            overflow-x: hidden;
           }
           .container {
             max-width: 760px;
@@ -107,6 +109,7 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
           .header p { font-size: 0.95rem; opacity: 0.82; }
           .secure-note { display: flex; align-items: center; gap: .45rem; margin-top: 1.25rem; font-size: .78rem; opacity: .76; }
           form { padding: 2.25rem; display: grid; gap: 1.35rem; }
+          form > *, .form-group, .form-row > * { min-width: 0; }
           .section-title {
             font-size: 1.1rem;
             font-weight: 600;
@@ -120,7 +123,7 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
           }
           .section-title::before { content: ''; width: 9px; height: 28px; border-radius: 999px; background: linear-gradient(180deg, #7C3AED, #4F46E5); }
           .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
-          .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+          .form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
           label { font-size: 0.9rem; font-weight: 600; color: var(--text-main); }
           input, textarea, select {
             width: 100%;
@@ -132,83 +135,109 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
             font-size: 0.95rem;
             transition: all 0.2s;
             outline: none;
+            min-width: 0;
+            max-width: 100%;
           }
           input:focus, textarea:focus, select:focus {
             border-color: var(--primary);
             background: white;
             box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.11);
           }
-          .file-input-wrapper {
-            background: #F3F4F6;
-            border: 2px dashed var(--border);
-            min-height: 54px;
-            padding: 0.9rem 1rem;
-            border-radius: 12px;
-            text-align: center;
-            cursor: pointer;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .file-input-wrapper input[type="file"] {
-            position: static;
-            width: 100%;
-            height: auto;
-            opacity: 1;
-            cursor: pointer;
-            padding: 0.55rem;
-            margin-top: 0.45rem;
-            background: white;
-            color: var(--text-main);
-          }
-          .file-input-wrapper .file-label {
-            display: block;
-            width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: normal;
-            font-size: 0.85rem; color: var(--text-muted);
-          }
-          .file-input-wrapper.selected {
-            background: #EEF2FF;
-            border-color: var(--primary);
-          }
-          .file-input-wrapper.selected .file-label { color: #3730A3; font-weight: 600; }
-          .upload-card {
+          .uploads-grid {
             display: grid;
-            grid-template-columns: 88px 1fr;
-            gap: 1rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.9rem;
+          }
+          .upload-card {
+            display: flex;
+            flex-direction: column;
+            gap: 0.7rem;
             align-items: center;
-            padding: 0.85rem;
+            justify-content: flex-start;
+            min-width: 0;
+            min-height: 270px;
+            padding: 1rem;
             border: 1px solid var(--border);
-            border-radius: 12px;
-            background: #FAFAFF;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #FFFFFF 0%, #FAFAFF 100%);
+            text-align: center;
+            transition: border-color .2s, box-shadow .2s, transform .2s;
+          }
+          .upload-card:hover {
+            border-color: #A5B4FC;
+            box-shadow: 0 10px 26px rgba(79, 70, 229, .09);
+            transform: translateY(-1px);
+          }
+          .upload-card:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, .11);
+          }
+          .upload-visual {
+            width: 104px;
+            height: 104px;
+            margin-bottom: .1rem;
           }
           .upload-preview {
-            width: 88px;
-            height: 88px;
-            border-radius: 10px;
+            width: 100%;
+            height: 100%;
+            border-radius: 14px;
             object-fit: cover;
             background: #EEF2FF;
             border: 1px solid #C7D2FE;
             display: none;
           }
+          .profile-upload .upload-preview,
+          .profile-upload .upload-placeholder { border-radius: 50%; }
           .upload-placeholder {
-            width: 88px;
-            height: 88px;
-            border-radius: 10px;
+            width: 100%;
+            height: 100%;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #EEF2FF;
+            background: linear-gradient(145deg, #EEF2FF, #EDE9FE);
             color: #4F46E5;
-            font-size: 1.65rem;
+            font-size: 2rem;
+            border: 1px solid #D8DEFF;
           }
           .upload-card.has-file .upload-preview { display: block; }
           .upload-card.has-file .upload-placeholder { display: none; }
-          .file-meta { color: var(--text-muted); font-size: 0.78rem; margin-top: 0.35rem; overflow-wrap: anywhere; }
-          .upload-title { font-size: 0.92rem; font-weight: 700; margin-bottom: 0.45rem; }
+          .upload-title { font-size: 0.94rem; font-weight: 700; color: #111827; }
+          .upload-hint { color: var(--text-muted); font-size: .76rem; min-height: 2.3em; }
+          .file-input-wrapper {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 44px;
+            padding: .65rem .8rem;
+            border: 1px solid #C7D2FE;
+            border-radius: 11px;
+            background: #EEF2FF;
+            color: #4338CA;
+            cursor: pointer;
+          }
+          .file-input-wrapper.selected { background: #E0E7FF; border-color: #818CF8; }
+          .file-label { font-size: .82rem; font-weight: 700; }
+          .visually-hidden-file {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+          }
+          .file-meta {
+            width: 100%;
+            color: var(--text-muted);
+            font-size: 0.73rem;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+          }
           .summary-card { background: #F8FAFC; padding: 1rem; border-radius: 12px; border: 1px solid var(--border); }
           .summary-row { display: flex; justify-content: space-between; gap: 1rem; padding: 0.3rem 0; }
           .summary-row strong { text-align: right; }
@@ -259,14 +288,42 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
           }
           .btn-submit:hover { background-color: var(--primary-hover); }
           .btn-submit:disabled { background-color: var(--text-muted); cursor: not-allowed; }
+          @media (max-width: 720px) {
+            .uploads-grid { grid-template-columns: 1fr; }
+            .upload-card {
+              display: grid;
+              grid-template-columns: 92px minmax(0, 1fr);
+              grid-template-areas:
+                "visual title"
+                "visual hint"
+                "visual trigger"
+                "meta meta";
+              min-height: 0;
+              text-align: left;
+              align-items: center;
+            }
+            .upload-visual { grid-area: visual; width: 92px; height: 92px; margin: 0; }
+            .upload-title { grid-area: title; align-self: end; }
+            .upload-hint { grid-area: hint; min-height: 0; }
+            .file-input-wrapper { grid-area: trigger; }
+            .file-meta { grid-area: meta; text-align: left; }
+          }
           @media (max-width: 600px) {
             .form-row { grid-template-columns: 1fr; }
             body { padding: 0; }
             .container { border: 0; border-radius: 0; box-shadow: none; }
             .header { padding: 1.75rem 1.25rem; }
             form { padding: 1.25rem; gap: 1.25rem; }
-            .upload-card { grid-template-columns: 72px 1fr; }
-            .upload-preview, .upload-placeholder { width: 72px; height: 72px; }
+            .summary-row { align-items: flex-start; }
+          }
+          @media (max-width: 390px) {
+            .header { padding: 1.5rem 1rem; }
+            form { padding: 1rem; }
+            .upload-card { grid-template-columns: 76px minmax(0, 1fr); padding: .85rem; }
+            .upload-visual { width: 76px; height: 76px; }
+            .file-input-wrapper { min-height: 42px; padding: .55rem .65rem; }
+            .summary-row { flex-direction: column; gap: .1rem; }
+            .summary-row strong { text-align: left; }
           }
           .loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -362,25 +419,31 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
               <input type="date" id="leavingDate">
             </div>
 
-            <h2 class="section-title">Required Documents</h2>
-            <div class="form-group">
-              <label>Profile Photo *</label>
-              <div class="upload-card" id="profileCard">
-                <div><div class="upload-placeholder">👤</div><img class="upload-preview" id="profilePreview" alt="Selected profile photo preview"></div>
-                <div><div class="upload-title">Your recent photo</div><div class="file-input-wrapper" id="profileWrapper"><span class="file-label" id="profilePhotoLabel">Tap to choose photo</span><input type="file" id="profilePhoto" accept="image/jpeg,image/png,image/webp" required></div><div class="file-meta" id="profileMeta">No photo selected</div></div>
+            <h2 class="section-title" id="requiredDocuments">Required Documents</h2>
+            <div class="uploads-grid">
+              <div class="upload-card profile-upload" id="profileCard">
+                <div class="upload-visual"><div class="upload-placeholder">👤</div><img class="upload-preview" id="profilePreview" alt="Selected profile photo preview"></div>
+                <div class="upload-title">Profile photo *</div>
+                <div class="upload-hint">Use a recent, clear face photo.</div>
+                <label class="file-input-wrapper" id="profileWrapper" for="profilePhoto"><span class="file-label" id="profilePhotoLabel">Choose photo</span></label>
+                <div class="file-meta" id="profileMeta">JPG, PNG or WEBP</div>
+                <input class="visually-hidden-file" type="file" id="profilePhoto" accept="image/jpeg,image/png,image/webp" required>
               </div>
-              <span class="help-text">Choose a clear face photo. JPG, PNG or WEBP files are accepted.</span>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Aadhaar Card Front *</label>
-                <div class="upload-card" id="aadhaarFrontCard"><div><div class="upload-placeholder">🪪</div><img class="upload-preview" id="aadhaarFrontPreview" alt="Aadhaar front preview"></div><div><div class="file-input-wrapper" id="aadhaarFrontWrapper"><span class="file-label" id="aadhaarFrontLabel">Tap to choose front</span><input type="file" id="aadhaarFront" accept="image/jpeg,image/png,image/webp" required></div><div class="file-meta" id="aadhaarFrontMeta">No image selected</div></div></div>
-                <span class="help-text">Upload a clear front-side image.</span>
+              <div class="upload-card" id="aadhaarFrontCard">
+                <div class="upload-visual"><div class="upload-placeholder">🪪</div><img class="upload-preview" id="aadhaarFrontPreview" alt="Aadhaar front preview"></div>
+                <div class="upload-title">Aadhaar front *</div>
+                <div class="upload-hint">Make sure all details are readable.</div>
+                <label class="file-input-wrapper" id="aadhaarFrontWrapper" for="aadhaarFront"><span class="file-label" id="aadhaarFrontLabel">Choose front image</span></label>
+                <div class="file-meta" id="aadhaarFrontMeta">JPG, PNG or WEBP</div>
+                <input class="visually-hidden-file" type="file" id="aadhaarFront" accept="image/jpeg,image/png,image/webp" required>
               </div>
-              <div class="form-group">
-                <label>Aadhaar Card Back *</label>
-                <div class="upload-card" id="aadhaarBackCard"><div><div class="upload-placeholder">🪪</div><img class="upload-preview" id="aadhaarBackPreview" alt="Aadhaar back preview"></div><div><div class="file-input-wrapper" id="aadhaarBackWrapper"><span class="file-label" id="aadhaarBackLabel">Tap to choose back</span><input type="file" id="aadhaarBack" accept="image/jpeg,image/png,image/webp" required></div><div class="file-meta" id="aadhaarBackMeta">No image selected</div></div></div>
-                <span class="help-text">Upload a clear back-side image.</span>
+              <div class="upload-card" id="aadhaarBackCard">
+                <div class="upload-visual"><div class="upload-placeholder">🪪</div><img class="upload-preview" id="aadhaarBackPreview" alt="Aadhaar back preview"></div>
+                <div class="upload-title">Aadhaar back *</div>
+                <div class="upload-hint">Make sure all details are readable.</div>
+                <label class="file-input-wrapper" id="aadhaarBackWrapper" for="aadhaarBack"><span class="file-label" id="aadhaarBackLabel">Choose back image</span></label>
+                <div class="file-meta" id="aadhaarBackMeta">JPG, PNG or WEBP</div>
+                <input class="visually-hidden-file" type="file" id="aadhaarBack" accept="image/jpeg,image/png,image/webp" required>
               </div>
             </div>
 
@@ -552,11 +615,11 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
 
           // File Label updates
           const fileInputs = [
-            { id: 'profilePhoto', wrapperId: 'profileWrapper', cardId: 'profileCard', previewId: 'profilePreview', metaId: 'profileMeta', emptyText: 'Tap to choose photo' },
-            { id: 'aadhaarFront', wrapperId: 'aadhaarFrontWrapper', cardId: 'aadhaarFrontCard', previewId: 'aadhaarFrontPreview', metaId: 'aadhaarFrontMeta', emptyText: 'Tap to choose front' },
-            { id: 'aadhaarBack', wrapperId: 'aadhaarBackWrapper', cardId: 'aadhaarBackCard', previewId: 'aadhaarBackPreview', metaId: 'aadhaarBackMeta', emptyText: 'Tap to choose back' },
+            { id: 'profilePhoto', wrapperId: 'profileWrapper', cardId: 'profileCard', previewId: 'profilePreview', metaId: 'profileMeta', emptyText: 'Choose photo', selectedText: 'Change photo', emptyMeta: 'JPG, PNG or WEBP' },
+            { id: 'aadhaarFront', wrapperId: 'aadhaarFrontWrapper', cardId: 'aadhaarFrontCard', previewId: 'aadhaarFrontPreview', metaId: 'aadhaarFrontMeta', emptyText: 'Choose front image', selectedText: 'Change front image', emptyMeta: 'JPG, PNG or WEBP' },
+            { id: 'aadhaarBack', wrapperId: 'aadhaarBackWrapper', cardId: 'aadhaarBackCard', previewId: 'aadhaarBackPreview', metaId: 'aadhaarBackMeta', emptyText: 'Choose back image', selectedText: 'Change back image', emptyMeta: 'JPG, PNG or WEBP' },
           ];
-          fileInputs.forEach(({ id, wrapperId, cardId, previewId, metaId, emptyText }) => {
+          fileInputs.forEach(({ id, wrapperId, cardId, previewId, metaId, emptyText, selectedText, emptyMeta }) => {
             const el = document.getElementById(id);
             const wrapper = document.getElementById(wrapperId);
             const card = document.getElementById(cardId);
@@ -566,7 +629,7 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
             el.addEventListener('change', () => {
               if (el.files && el.files[0]) {
                 const file = el.files[0];
-                label.textContent = 'Change image';
+                label.textContent = selectedText;
                 label.title = file.name;
                 meta.textContent = file.name + ' · ' + Math.max(1, Math.round(file.size / 1024)) + ' KB';
                 const previewReader = new FileReader();
@@ -582,8 +645,11 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
               } else {
                 label.textContent = emptyText;
                 label.removeAttribute('title');
-                meta.textContent = id === 'profilePhoto' ? 'No photo selected' : 'No image selected';
+                meta.textContent = emptyMeta;
                 preview.removeAttribute('src');
+                preview.style.display = 'none';
+                const placeholder = card.querySelector('.upload-placeholder');
+                if (placeholder) placeholder.style.display = 'flex';
                 wrapper.classList.remove('selected');
                 card.classList.remove('has-file');
               }
