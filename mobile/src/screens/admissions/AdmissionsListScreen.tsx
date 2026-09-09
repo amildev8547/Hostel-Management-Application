@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
-import { Searchbar, Card, Text, useTheme, SegmentedButtons, Button } from 'react-native-paper';
-import { useQuery } from '@tanstack/react-query';
+import { Searchbar, Card, Text, useTheme, SegmentedButtons, Button, IconButton } from 'react-native-paper';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { showAlert, showConfirm } from '../../utils/alerts';
+import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type AdmissionsListScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -15,8 +17,10 @@ interface AdmissionsListScreenProps {
 
 export default function AdmissionsListScreen({ navigation }: AdmissionsListScreenProps) {
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('PENDING');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Fetch admission applications
   const { data: applications, isLoading, refetch, isRefetching } = useQuery<any[]>({
@@ -33,6 +37,30 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
     refetchOnMount: 'always',
   });
 
+  const deleteApplication = (application: any) => {
+    showConfirm(
+      `Delete ${application.name}’s application? Its fee and document records will be removed. Any linked advance booking will stay reserved so they can correct and resubmit the form.`,
+      async () => {
+        setDeletingId(application.id);
+        try {
+          const response = await apiClient.delete(`/admissions/${application.id}`);
+          await invalidateHostelData(queryClient, {
+            branchId: application.branchId,
+            applicationId: application.id,
+          });
+          await queryClient.invalidateQueries({ queryKey: ['bookings'] });
+          await refetch();
+          showAlert(response.data?.message || 'Application deleted.', 'Application deleted');
+        } catch (err: any) {
+          showAlert(err.response?.data?.error || 'Could not delete this application.');
+        } finally {
+          setDeletingId(null);
+        }
+      },
+      { title: 'Delete application?', confirmText: 'Delete application', destructive: true },
+    );
+  };
+
   const renderApplicationItem = ({ item }: { item: any }) => {
     return (
       <Card
@@ -45,7 +73,7 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
               <Text variant="titleMedium" style={styles.applicantName}>{item.name}</Text>
               <Text variant="bodySmall" style={styles.applicantSub}>📞 {item.phone}</Text>
               <Text variant="bodySmall" style={styles.applicantSub}>
-                🏠 {item.branch.name} • {item.preferredRoomType} Sharing
+                🏠 {item.branch?.name || 'Branch not available'} • {item.preferredRoomType || 'Room type not selected'}
               </Text>
               <Text variant="bodySmall" style={{ color: '#94A3B8', marginTop: 4 }}>
                 Join Date: {new Date(item.joiningDate).toLocaleDateString()}
@@ -73,7 +101,20 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
                 Joining fee: {item.paymentStatus === 'PAID' ? 'Paid' : 'Not paid'}
               </Text>
             </View>
-            <Icon name="chevron-right" size={24} color="#94A3B8" style={{ marginTop: 14 }} />
+            <View style={styles.cardActions}>
+              {item.status !== 'APPROVED' && (
+                <IconButton
+                  icon="delete-outline"
+                  iconColor={theme.colors.error}
+                  size={21}
+                  disabled={deletingId === item.id}
+                  loading={deletingId === item.id}
+                  accessibilityLabel={`Delete ${item.name}'s application`}
+                  onPress={() => deleteApplication(item)}
+                />
+              )}
+              <Icon name="chevron-right" size={24} color="#94A3B8" />
+            </View>
           </View>
         </Card.Content>
       </Card>
@@ -83,9 +124,9 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.introBox}>
-        <Text style={styles.introTitle}>Hostel applications</Text>
-        <Text style={styles.introText}>Tap a person to check their information and accept or decline their request.</Text>
-        <Button mode="contained" icon="bed" style={styles.bookingButton} onPress={() => navigation.navigate('BookingList')}>View and create bed bookings</Button>
+        <Text style={styles.introTitle}>Admissions and advance bookings</Text>
+        <Text style={styles.introText}>Review completed admission forms below. To reserve a room before the person fills the form, open advance bookings.</Text>
+        <Button mode="contained" icon="bed" style={styles.bookingButton} onPress={() => navigation.navigate('BookingList')}>Manage advance bookings</Button>
       </View>
       <Searchbar
         placeholder="Search people who applied…"
@@ -185,6 +226,11 @@ const styles = StyleSheet.create({
   },
   rightSection: {
     alignItems: 'flex-end',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
   },
   badge: {
     paddingHorizontal: 8,

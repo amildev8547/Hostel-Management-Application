@@ -33,7 +33,7 @@
 - **Add new branches** with name, address, phone, Google Maps location
 - **Edit branch** details anytime
 - **Delete a branch** (cascading removal of all rooms/tenants/data)
-- **Set rent due day** per branch (e.g., rent due on 5th of every month)
+- **Resident-specific rent due date** — each resident's monthly rent is due on their joining-day number (month-end is used when that day does not exist)
 - **Activate / Deactivate** a branch
 - **Branch Dashboard** — individual branch-level stats including:
   - Total rooms, vacant/partial/full rooms
@@ -53,7 +53,6 @@
   - `AVAILABLE` (no tenants)
   - `PARTIAL` (some beds occupied)
   - `FULL` (all beds occupied)
-  - `MAINTENANCE` (manually set)
 - **Edit room** details
 - **Delete room** (only if no active tenants)
 - **View room details** — see current occupants, vacancy info, and recent payment history
@@ -99,6 +98,9 @@
   - Additional notes
   - Auto-shows correct admission fee based on room type
 - **Admission fee auto-calculated** from actual room pricing (server-side)
+- **Manual admission-fee status** — the admin can mark the fee paid by cash/UPI or change it back to not paid whenever a correction is needed
+- **Delete incorrect or duplicate applications** — fee/document records are removed; linked advance bookings remain reserved for correction
+- **One-time form submissions** — expiring form tokens and branch/phone duplicate protection stop replayed submissions
 - **Date validation** — joining date can't be more than 7 days in the past; leaving date must be after joining
 - **View all applications** — list with filter by status (Pending / Approved / Rejected) and search
 - **Review applications** — owner can approve or reject
@@ -110,6 +112,7 @@
 ## 7. 💰 Payment & Billing
 
 - **Automatic monthly rent generation** — generate rent invoices for all active tenants in one tap
+- **Joining-date billing cycle** — every standard monthly bill uses the resident's joining day, safely clamped at month-end
 - **Custom rent invoice** — create prorated invoices for partial stays (e.g., 10 days, 15 days)
 - **Discount support** — apply discount amounts on rent invoices
 - **Edit payment amount** — adjust pending/overdue invoice amounts
@@ -181,6 +184,8 @@
   - Required fields enforced
   - Date format and logic validation
 - **Admission fee computed server-side** — prevents clients from manipulating the fee
+- **Public form replay protection** — expiring single-use tokens, atomic duplicate guards, and booking-state checks
+- **Public form abuse protection** — request throttling, payload limits, real image-signature checks, secure response headers, and escaped public content
 - **Razorpay webhook signature verification** — ensures payment callbacks are genuine
 - **Password hashing** — bcrypt encryption for all stored passwords
 - **CORS enabled** — secure cross-origin requests

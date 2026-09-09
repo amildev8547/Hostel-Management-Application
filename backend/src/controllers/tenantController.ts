@@ -2,6 +2,8 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
 import { updateRoomOccupancyStatus } from '../utils/occupancy';
+import { ensureCurrentMonthRentInvoice } from '../utils/rentBilling';
+import { createOwnerNotification } from '../services/notifications';
 
 export async function getTenants(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
@@ -156,13 +158,13 @@ export async function moveTenant(req: AuthenticatedRequest, res: Response) {
     await updateRoomOccupancyStatus(newRoomId);
 
     // Record activity
-    await prisma.notification.create({
-      data: {
-        title: 'Tenant Room Reallocated',
-        message: `Tenant ${tenant.name} was moved from Room ${tenant.room.roomNumber} to Room ${newRoom.roomNumber}.`,
-        type: 'ADMISSION_APPROVED',
-        userId,
-      },
+    await createOwnerNotification({
+      title: 'Resident Room Changed',
+      message: `${tenant.name} was moved from Room ${tenant.room.roomNumber} to Room ${newRoom.roomNumber}.`,
+      type: 'ADMISSION_APPROVED',
+      userId,
+      branchId: newRoom.branchId,
+      tenantId: id,
     });
 
     res.json({ message: 'Tenant successfully relocated', tenant: updated });
@@ -207,19 +209,95 @@ export async function vacateTenant(req: AuthenticatedRequest, res: Response) {
     await updateRoomOccupancyStatus(tenant.roomId);
 
     // Notify Owner
-    await prisma.notification.create({
-      data: {
-        title: 'Tenant Vacated',
-        message: `Tenant ${tenant.name} has checked out of Room ${tenant.room.roomNumber}.`,
-        type: 'TENANT_VACATED',
-        userId,
-      },
+    await createOwnerNotification({
+      title: 'Resident Moved Out',
+      message: `${tenant.name} has moved out of Room ${tenant.room.roomNumber}.`,
+      type: 'TENANT_VACATED',
+      userId,
+      branchId: tenant.room.branchId,
+      tenantId: id,
     });
 
     res.json({ message: 'Tenant vacated successfully', tenant: updated });
   } catch (error) {
     console.error('Vacate tenant error:', error);
     res.status(500).json({ error: 'Failed to vacate tenant' });
+  }
+}
+
+export async function readmitTenant(req: AuthenticatedRequest, res: Response) {
+  const { id } = req.params;
+  const { newRoomId } = req.body;
+  const userId = req.user?.id;
+
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!newRoomId) return res.status(400).json({ error: 'Choose a room for the returning resident.' });
+
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id },
+      include: { room: { include: { branch: true } } },
+    });
+
+    if (!tenant || tenant.room.branch.userId !== userId) {
+      return res.status(404).json({ error: 'Resident not found' });
+    }
+    if (tenant.status !== 'VACATED') {
+      return res.status(400).json({ error: 'This resident is already active.' });
+    }
+
+    const newRoom = await prisma.room.findUnique({
+      where: { id: newRoomId },
+      include: { tenants: { where: { status: 'ACTIVE' } }, bookings: true, branch: true },
+    });
+    if (!newRoom || newRoom.branch.userId !== userId) {
+      return res.status(404).json({ error: 'Selected room not found' });
+    }
+
+    const reservedBeds = newRoom.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
+    if (newRoom.tenants.length + reservedBeds >= newRoom.capacity) {
+      return res.status(400).json({ error: 'The selected room does not have a free place.' });
+    }
+
+    const oldRoomId = tenant.roomId;
+    await prisma.booking.deleteMany({ where: { tenantId: id } });
+    const returningJoiningDate = new Date();
+    const claim = await prisma.tenant.updateMany({
+      where: { id, status: 'VACATED' },
+      data: {
+        roomId: newRoomId,
+        status: 'ACTIVE',
+        joiningDate: returningJoiningDate,
+        leavingDate: null,
+      },
+    });
+    if (claim.count !== 1) {
+      return res.status(409).json({ error: 'This resident was already admitted again on another device.' });
+    }
+    const updated = await prisma.tenant.findUnique({ where: { id } });
+
+    if (oldRoomId !== newRoomId) await updateRoomOccupancyStatus(oldRoomId);
+    await updateRoomOccupancyStatus(newRoomId);
+    await ensureCurrentMonthRentInvoice({
+      tenantId: id,
+      branchId: newRoom.branchId,
+      monthlyRent: newRoom.monthlyRent,
+      joiningDate: returningJoiningDate,
+    });
+
+    await createOwnerNotification({
+      title: 'Resident Admitted Again',
+      message: `${tenant.name} has returned and was assigned to Room ${newRoom.roomNumber}.`,
+      type: 'ADMISSION_APPROVED',
+      userId,
+      branchId: newRoom.branchId,
+      tenantId: id,
+    });
+
+    res.json({ message: 'Resident admitted again using the saved details.', tenant: updated });
+  } catch (error) {
+    console.error('Readmit tenant error:', error);
+    res.status(500).json({ error: 'Failed to admit this resident again' });
   }
 }
 

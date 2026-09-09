@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
-import { getCalendarMonthRange, markOverdueRentInvoices } from '../utils/rentBilling';
+import { getCalendarMonthRange, markOverdueRentInvoices, syncCurrentMonthRentDueDates } from '../utils/rentBilling';
 
 export async function getHomeDashboard(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
@@ -48,6 +48,7 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
 
     const branchIds = branches.map((b) => b.id);
 
+    await syncCurrentMonthRentDueDates({ userId, now });
     await markOverdueRentInvoices(userId);
     const payments = await prisma.payment.findMany({
       where: {

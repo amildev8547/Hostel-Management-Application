@@ -1,13 +1,15 @@
 import React from 'react';
-import { NavigationContainer, NavigatorScreenParams, useNavigation } from '@react-navigation/native';
+import { createNavigationContainerRef, NavigationContainer, NavigatorScreenParams, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../services/api';
 import { applyLocalNotificationState } from '../services/storage';
+import { registerForPushNotifications } from '../services/pushNotifications';
+import * as Notifications from 'expo-notifications';
 
 // Screens
 import DashboardScreen from '../screens/home/DashboardScreen';
@@ -37,10 +39,11 @@ export type RootStackParamList = {
   RoomDetails: { roomId: string };
   RoomForm: { branchId: string; roomId?: string };
   TenantProfile: { tenantId: string };
-  MoveTenant: { tenantId: string; branchId: string };
+  MoveTenant: { tenantId: string; branchId: string; readmit?: boolean };
   AdmissionReview: { applicationId: string };
-  PaymentsDashboard: { branchId?: string };
+  PaymentsDashboard: { branchId?: string; initialStatus?: 'pending' | 'overdue' | 'paid' };
   Notifications: undefined;
+  Settings: undefined;
   BookingList: undefined;
   BookingForm: { branchId?: string } | undefined;
 };
@@ -50,11 +53,29 @@ export type TabParamList = {
   Branches: undefined;
   Admissions: undefined;
   Tenants: undefined;
-  Settings: undefined;
+  Payments: undefined;
 };
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
+let pendingPushData: Record<string, any> | null = null;
+
+function openPushNotification(data: Record<string, any>) {
+  if (!navigationRef.isReady()) {
+    pendingPushData = data;
+    return;
+  }
+  pendingPushData = null;
+  const navigation = navigationRef as any;
+  if (data.type === 'RENT_OVERDUE' || data.type === 'RENT_DUE_TODAY' || data.type === 'RENT_PAYMENT_RECEIVED') {
+    navigation.navigate('PaymentsDashboard', { branchId: data.branchId, initialStatus: data.type === 'RENT_PAYMENT_RECEIVED' ? 'paid' : data.type === 'RENT_OVERDUE' ? 'overdue' : 'pending' });
+  } else if ((data.type === 'NEW_ADMISSION' || data.type === 'ADMISSION_PAYMENT_RECEIVED') && data.applicationId) {
+    navigation.navigate('AdmissionReview', { applicationId: data.applicationId });
+  } else if (data.tenantId) navigation.navigate('TenantProfile', { tenantId: data.tenantId });
+  else if (data.applicationId) navigation.navigate('AdmissionReview', { applicationId: data.applicationId });
+  else navigation.navigate('Main', { screen: 'Home' });
+}
 
 // Bell icon shown in every tab's header, badged with the live unread count, that
 // jumps to the Notifications screen (today's vacating tenants, rent due/overdue alerts).
@@ -87,6 +108,18 @@ function NotificationBell() {
   );
 }
 
+function HeaderActions() {
+  const navigation = useNavigation<any>();
+  return (
+    <View style={styles.headerActions}>
+      <TouchableOpacity style={styles.settingsButton} onPress={() => navigation.navigate('Settings')} accessibilityRole="button" accessibilityLabel="Open settings">
+        <Icon name="cog-outline" size={24} color="#0F172A" />
+      </TouchableOpacity>
+      <NotificationBell />
+    </View>
+  );
+}
+
 // Authenticated tabs
 function TabNavigator() {
   return (
@@ -98,7 +131,7 @@ function TabNavigator() {
           else if (route.name === 'Branches') iconName = 'office-building';
           else if (route.name === 'Admissions') iconName = 'account-clock';
           else if (route.name === 'Tenants') iconName = 'account-group';
-          else if (route.name === 'Settings') iconName = 'cog-outline';
+          else if (route.name === 'Payments') iconName = 'cash-multiple';
 
           return <Icon name={iconName} size={size} color={color} />;
         },
@@ -111,22 +144,46 @@ function TabNavigator() {
         headerShown: true,
         headerStyle: { backgroundColor: '#FFFFFF' },
         headerTitleStyle: { fontWeight: '700', fontSize: 18, color: '#0F172A' },
-        headerRight: () => <NotificationBell />,
+        headerRight: () => <HeaderActions />,
       })}
     >
       <Tab.Screen name="Home" component={DashboardScreen} options={{ title: 'Home' }} />
       <Tab.Screen name="Branches" component={BranchListScreen} options={{ title: 'Hostel Branches', tabBarLabel: 'Hostels' }} />
-      <Tab.Screen name="Admissions" component={AdmissionsListScreen} options={{ title: 'Applications', tabBarLabel: 'Requests' }} />
-      <Tab.Screen name="Tenants" component={TenantListScreen} options={{ title: 'People Staying', tabBarLabel: 'Residents' }} />
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+      <Tab.Screen name="Admissions" component={AdmissionsListScreen} options={{ title: 'Admissions', tabBarLabel: 'Admission' }} />
+      <Tab.Screen name="Tenants" component={TenantListScreen} options={{ title: 'Residents', tabBarLabel: 'Resident' }} />
+      <Tab.Screen name="Payments" component={PaymentsDashboardScreen as any} options={{ title: 'Payments', tabBarLabel: 'Payments' }} />
     </Tab.Navigator>
   );
 }
 
 // Global App Navigation Container
 export default function AppNavigator() {
+  const queryClient = useQueryClient();
+  React.useEffect(() => {
+    void registerForPushNotifications();
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      openPushNotification(response.notification.request.content.data as Record<string, any>);
+    });
+    const receivedSubscription = Notifications.addNotificationReceivedListener(() => {
+      void queryClient.refetchQueries({ type: 'active' });
+    });
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) {
+        openPushNotification(response.notification.request.content.data as Record<string, any>);
+        void Notifications.clearLastNotificationResponseAsync();
+      }
+    });
+    return () => {
+      responseSubscription.remove();
+      receivedSubscription.remove();
+    };
+  }, [queryClient]);
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={() => pendingPushData && openPushNotification(pendingPushData)}
+      onStateChange={() => void queryClient.refetchQueries({ type: 'active' })}
+    >
       <RootStack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#FFFFFF' }, headerTitleStyle: { fontWeight: '600' } }}>
         <RootStack.Screen name="Main" component={TabNavigator} options={{ headerShown: false }} />
         <RootStack.Screen name="BranchDashboard" component={BranchDashboardScreen} options={({ route }) => ({ title: route.params.branchName })} />
@@ -139,6 +196,7 @@ export default function AppNavigator() {
         <RootStack.Screen name="AdmissionReview" component={AdmissionReviewScreen} options={{ title: 'Check Application' }} />
         <RootStack.Screen name="PaymentsDashboard" component={PaymentsDashboardScreen} options={{ title: 'Rent Payments' }} />
         <RootStack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
+        <RootStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
         <RootStack.Screen name="BookingList" component={BookingListScreen} options={{ title: 'Bed Bookings' }} />
         <RootStack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Book a Bed' }} />
       </RootStack.Navigator>
@@ -166,9 +224,11 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   bellButton: {
-    marginRight: 12,
+    marginRight: 8,
     padding: 10,
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
+  settingsButton: { padding: 10 },
   bellBadge: {
     position: 'absolute',
     top: -2,

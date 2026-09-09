@@ -1,7 +1,43 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import prisma from '../config/db';
+import { issueAdmissionFormToken } from '../services/admissionFormSecurity';
 
 const router = Router();
+
+router.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  );
+  next();
+});
+
+const publicFormLoads = new Map<string, { count: number; resetAt: number }>();
+function limitPublicFormLoads(req: Request, res: Response, next: NextFunction) {
+  const now = Date.now();
+  const key = req.ip || req.socket.remoteAddress || 'unknown';
+  const current = publicFormLoads.get(key);
+  const entry = !current || current.resetAt <= now
+    ? { count: 1, resetAt: now + 15 * 60 * 1000 }
+    : { ...current, count: current.count + 1 };
+  publicFormLoads.set(key, entry);
+
+  if (publicFormLoads.size > 10_000) {
+    for (const [storedKey, value] of publicFormLoads) {
+      if (value.resetAt <= now) publicFormLoads.delete(storedKey);
+    }
+  }
+  if (entry.count > 30) {
+    res.setHeader('Retry-After', String(Math.ceil((entry.resetAt - now) / 1000)));
+    return res.status(429).send('<h1>Too many requests</h1><p>Please wait a few minutes and try again.</p>');
+  }
+  next();
+}
 
 function escapeHtml(value: string | number | null | undefined) {
   return String(value ?? '')
@@ -21,7 +57,7 @@ function settingValue(settings: { key: string; value: string }[] | undefined, ke
 }
 
 // Public admission form. A secure booking link locks the reserved branch, room, bed and basic details.
-router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res: Response) => {
+router.get(['/apply/:branchId', '/book/:bookingToken'], limitPublicFormLoads, async (req: Request, res: Response) => {
   const booking = req.params.bookingToken
     ? await prisma.booking.findUnique({ where: { secureToken: req.params.bookingToken }, include: { room: true, branch: true } })
     : null;
@@ -39,6 +75,8 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
     if (!branch) {
       return res.status(404).send('<h1>Branch not found</h1>');
     }
+
+    const formToken = await issueAdmissionFormToken(branchId, booking?.secureToken);
 
     // Build a roomType -> cheapest admissionFee map so the displayed fee always matches
     // real room pricing instead of a hardcoded flat number.
@@ -700,6 +738,7 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], async (req: Request, res
                 notes: document.getElementById('notes').value || undefined,
                 branchId: ${JSON.stringify(branchId)},
                 bookingToken: ${JSON.stringify(booking?.secureToken || undefined)},
+                formToken: ${JSON.stringify(formToken)},
                 amount: roomFeeMap[preferredRoomTypeInput.value] ?? cheapestOverallFee // Display only; server recomputes the real fee
               };
 

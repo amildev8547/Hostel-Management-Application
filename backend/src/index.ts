@@ -8,7 +8,7 @@ dotenv.config();
 
 import branchRoutes from './routes/branchRoutes';
 import roomRoutes from './routes/roomRoutes';
-import admissionRoutes from './routes/admissionRoutes';
+import admissionRoutes, { limitPublicAdmissionSubmissions } from './routes/admissionRoutes';
 import tenantRoutes from './routes/tenantRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import notificationRoutes from './routes/notificationRoutes';
@@ -20,9 +20,13 @@ import prisma from './config/db';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(cors());
+// Block repeated public form submissions before Express spends time parsing their
+// image payloads. The normal admission router performs validation afterward.
+app.use('/api/admissions/apply', limitPublicAdmissionSubmissions);
 // Admission forms send three base64 images; compression runs client-side, but keep
 // enough headroom for older phones and browser camera files.
 app.use(express.json({ limit: '25mb' }));

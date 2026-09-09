@@ -16,7 +16,7 @@ type AppSplashScreenProps = {
 };
 
 const MINIMUM_SPLASH_DURATION = 3000;
-const MAXIMUM_SPLASH_DURATION = 20000;
+const MAXIMUM_SPLASH_DURATION = 45000;
 
 function HostelHubMark({ size }: { size: number }) {
   return (

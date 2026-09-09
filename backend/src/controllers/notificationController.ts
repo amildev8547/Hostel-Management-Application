@@ -4,6 +4,27 @@ import prisma from '../config/db';
 
 const DISMISSED_ALERTS_KEY = 'dismissed_notification_alert_ids';
 
+export async function registerPushToken(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.id;
+  const { token, platform = 'unknown' } = req.body;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (typeof token !== 'string' || !/^Expo(nent)?PushToken\[[^\]]+\]$/.test(token)) {
+    return res.status(400).json({ error: 'Invalid Expo push token' });
+  }
+
+  try {
+    await prisma.devicePushToken.upsert({
+      where: { token },
+      update: { userId, platform: String(platform), active: true },
+      create: { token, userId, platform: String(platform), active: true },
+    });
+    res.json({ message: 'Phone notifications enabled' });
+  } catch (error) {
+    console.error('Register push token error:', error);
+    res.status(500).json({ error: 'Failed to enable phone notifications' });
+  }
+}
+
 async function getDismissedAlertIds(userId: string): Promise<string[]> {
   const setting = await prisma.setting.findFirst({ where: { userId, key: DISMISSED_ALERTS_KEY } });
   if (!setting) return [];
@@ -72,6 +93,7 @@ async function getLiveAlerts(userId: string) {
     createdAt: p.dueDate,
     paymentId: p.id,
     tenantId: p.tenantId,
+    branchId: p.branchId,
   }));
 
   const dueTodayAlerts = dueTodayPayments.map((p) => ({
@@ -84,6 +106,7 @@ async function getLiveAlerts(userId: string) {
     createdAt: now,
     paymentId: p.id,
     tenantId: p.tenantId,
+    branchId: p.branchId,
   }));
 
   const vacatingAlerts = vacatingToday.map((t) => ({
@@ -95,6 +118,7 @@ async function getLiveAlerts(userId: string) {
     isLive: true,
     createdAt: now,
     tenantId: t.id,
+    branchId: t.room.branchId,
   }));
 
   // Most urgent first: overdue rent, then due today, then today's checkouts.

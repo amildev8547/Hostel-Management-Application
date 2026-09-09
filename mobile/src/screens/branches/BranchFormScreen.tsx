@@ -9,7 +9,7 @@ import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
-import { showAlert, showConfirm } from '../../utils/alerts';
+import { showAlert } from '../../utils/alerts';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type BranchFormRouteProp = RouteProp<RootStackParamList, 'BranchForm'>;
@@ -81,26 +81,6 @@ export default function BranchFormScreen({ route, navigation }: BranchFormScreen
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleDelete = () => {
-    showConfirm(
-      'Are you sure you want to delete this branch? All associated rooms and data will be permanently removed.',
-      async () => {
-        setIsSubmitting(true);
-        try {
-          await apiClient.delete(`/branches/${branchId}`);
-          await invalidateHostelData(queryClient, { branchId });
-          showAlert('Branch deleted', 'Success', () => navigation.navigate('Main'));
-        } catch (err: any) {
-          console.error(err);
-          showAlert(err.response?.data?.error || 'Failed to delete branch');
-        } finally {
-          setIsSubmitting(false);
-        }
-      },
-      { title: 'Delete Branch', confirmText: 'Delete', destructive: true }
-    );
   };
 
   if (isLoading) {
@@ -182,17 +162,6 @@ export default function BranchFormScreen({ route, navigation }: BranchFormScreen
             {branchId ? 'Save changes' : 'Add hostel branch'}
           </Button>
 
-          {branchId && (
-            <Button
-              mode="text"
-              onPress={handleDelete}
-              textColor={theme.colors.error}
-              style={{ marginTop: 10 }}
-              disabled={isSubmitting}
-            >
-              Delete this branch
-            </Button>
-          )}
         </Surface>
       </ScrollView>
     </KeyboardAvoidingView>

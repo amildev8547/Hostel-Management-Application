@@ -4,7 +4,7 @@ import prisma from '../config/db';
 import { updateRoomOccupancyStatus } from '../utils/occupancy';
 
 export async function createRoom(req: AuthenticatedRequest, res: Response) {
-  const { branchId, roomNumber, floor, roomType, capacity, monthlyRent, admissionFee, status } = req.body;
+  const { branchId, roomNumber, floor, roomType, capacity, monthlyRent, admissionFee } = req.body;
   const userId = req.user?.id;
 
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -27,7 +27,7 @@ export async function createRoom(req: AuthenticatedRequest, res: Response) {
         capacity,
         monthlyRent,
         admissionFee,
-        status: status || 'AVAILABLE',
+        status: 'AVAILABLE',
         branchId,
       },
     });
@@ -71,13 +71,18 @@ export async function getRooms(req: AuthenticatedRequest, res: Response) {
     const results = rooms.map((room) => {
       const occupied = room.tenants.length;
       const reserved = room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
+      const unavailable = occupied + reserved;
+      const status = unavailable === 0 ? 'AVAILABLE' : unavailable < room.capacity ? 'PARTIAL' : 'FULL';
       return {
         ...room,
+        status,
         occupied,
         reserved,
         vacant: Math.max(0, room.capacity - occupied - reserved),
       };
     });
+
+    await Promise.all(results.filter((room, index) => room.status !== rooms[index].status).map((room) => prisma.room.update({ where: { id: room.id }, data: { status: room.status } })));
 
     res.json(results);
   } catch (error) {
@@ -118,8 +123,12 @@ export async function getRoomById(req: AuthenticatedRequest, res: Response) {
 
     const occupied = room.tenants.length;
     const reserved = room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
+    const unavailable = occupied + reserved;
+    const status = unavailable === 0 ? 'AVAILABLE' : unavailable < room.capacity ? 'PARTIAL' : 'FULL';
+    if (status !== room.status) await prisma.room.update({ where: { id }, data: { status } });
     res.json({
       ...room,
+      status,
       occupied,
       reserved,
       vacant: Math.max(0, room.capacity - occupied - reserved),
@@ -134,7 +143,7 @@ export async function getRoomById(req: AuthenticatedRequest, res: Response) {
 
 export async function updateRoom(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const { roomNumber, floor, roomType, capacity, monthlyRent, admissionFee, status } = req.body;
+  const { roomNumber, floor, roomType, capacity, monthlyRent, admissionFee } = req.body;
   const userId = req.user?.id;
 
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -142,11 +151,20 @@ export async function updateRoom(req: AuthenticatedRequest, res: Response) {
   try {
     const room = await prisma.room.findUnique({
       where: { id },
-      include: { branch: true },
+      include: {
+        branch: true,
+        tenants: { where: { status: 'ACTIVE' } },
+        bookings: true,
+      },
     });
 
     if (!room || room.branch.userId !== userId) {
       return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const reservedBeds = room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
+    if (capacity < room.tenants.length + reservedBeds) {
+      return res.status(400).json({ error: 'The number of beds cannot be lower than the places already occupied or reserved.' });
     }
 
     const updated = await prisma.room.update({
@@ -158,7 +176,6 @@ export async function updateRoom(req: AuthenticatedRequest, res: Response) {
         capacity,
         monthlyRent,
         admissionFee,
-        status,
       },
     });
 

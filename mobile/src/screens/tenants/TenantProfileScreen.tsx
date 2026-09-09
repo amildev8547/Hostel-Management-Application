@@ -542,6 +542,20 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
         </View>
       )}
 
+      {tenant.status === 'VACATED' && (
+        <View style={styles.actionButtons}>
+          <Button
+            mode="contained"
+            icon="account-reactivate-outline"
+            style={styles.actionBtn}
+            onPress={() => navigation.navigate('MoveTenant', { tenantId: tenant.id, branchId: tenant.room.branchId, readmit: true })}
+          >
+            Admit this resident again
+          </Button>
+          <Text style={styles.readmitHelp}>Saved personal details and documents will be reused. You can choose any available room and sharing type.</Text>
+        </View>
+      )}
+
       <Button
         mode="text"
         icon="delete"
@@ -723,6 +737,7 @@ const styles = StyleSheet.create({
     minHeight: 50,
     justifyContent: 'center',
   },
+  readmitHelp: { color: '#64748B', fontSize: 13, lineHeight: 19, textAlign: 'center' },
   modalBg: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.9)',

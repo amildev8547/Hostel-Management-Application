@@ -12,6 +12,7 @@ This codebase is split into two primary components:
 - The secure form locks and pre-fills the booked branch, room, bed, name, phone, and joining date.
 - Reserved beds are excluded from availability and protected from another booking, admission, or room move.
 - Approval converts the booking to an occupied bed. Cancellation or rejection releases it.
+- Public forms use an expiring one-time submission token. A branch/phone pair cannot submit twice unless the owner deletes the incorrect application first.
 - The backend start command applies the Prisma schema before starting so Render creates the MongoDB booking collection and unique bed lock.
 
 ---
@@ -121,7 +122,9 @@ All API endpoints are prefixed with `/api`.
 - `POST /admissions/apply` - **[PUBLIC]** Submit application with base64 Profile Photo, Aadhaar Front, and Aadhaar Back. Creates pending rent record and returns Razorpay payment link.
 - `GET /admissions` - View applications list (filters: `?status=PENDING|APPROVED|REJECTED`).
 - `GET /admissions/:id` - Retrieve applicant details and file links.
+- `PATCH /admissions/:id/fee-status` - Manually set the admission fee to `PAID` or `PENDING` when a correction is needed.
 - `POST /admissions/:id/review` - Review application. Body: `{ status: "APPROVED" | "REJECTED", roomId: "<id>" }`. Moves applicant to Tenant directory, releases beds, and updates occupancy.
+- `DELETE /admissions/:id` - Delete a pending/rejected incorrect application and allow a corrected submission. A linked advance booking remains reserved.
 
 ### 4. Tenant Management
 - `GET /tenants` - Get active tenants (filters: `?status=ACTIVE|VACATED`, `?search=`).
@@ -133,7 +136,7 @@ All API endpoints are prefixed with `/api`.
 
 ### 5. Billing & Payments
 - `GET /payments` - Retrieve collections (filters: `?status=PAID|PENDING|OVERDUE`, `?branchId=`).
-- `POST /payments/generate-dues` - **[OWNER ACTION]** Automatically generates PENDING monthly rent records for all active tenants who do not already have an invoice for the current month.
+- `POST /payments/generate-dues` - **[OWNER ACTION]** Generates the current month's rent records. Each resident's bill is due on their joining-day number (clamped to the last day in shorter months).
 - `POST /payments/:id/link` - Creates a Razorpay checkout URL for an unpaid invoice.
 - `POST /payments/:id/reminder` - Generates a WhatsApp reminder template and redirects the owner to WhatsApp.
 - `POST /payments/webhook` - **[PUBLIC]** Receives Razorpay webhook payloads (`payment_link.paid`, `payment.captured`), marks records as paid, and releases notifications.

@@ -114,9 +114,9 @@ export default function SettingsScreen() {
           />
           <Divider />
           <List.Item
-            title="Show reminder alerts"
+            title="Phone and in-app alerts"
             titleNumberOfLines={2}
-            description="Remind me about rent due, late payments, and people leaving"
+            description="Show important admissions, payments, rent, and resident updates"
             left={(props) => <List.Icon {...props} icon="bell-ring-outline" />}
             right={() => (
               <Switch

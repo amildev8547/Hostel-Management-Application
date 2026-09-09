@@ -2,7 +2,8 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
 import { buildUpiPaymentUrl, getSettingValue } from '../utils/upi';
-import { ensureCurrentMonthRentInvoice, getCalendarMonthRange, markOverdueRentInvoices } from '../utils/rentBilling';
+import { ensureCurrentMonthRentInvoice, getCalendarMonthRange, markOverdueRentInvoices, syncCurrentMonthRentDueDates } from '../utils/rentBilling';
+import { createOwnerNotification } from '../services/notifications';
 
 export async function getPayments(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
@@ -24,6 +25,7 @@ export async function getPayments(req: AuthenticatedRequest, res: Response) {
   }
 
   try {
+    await syncCurrentMonthRentDueDates({ userId });
     await markOverdueRentInvoices(userId);
     const payments = await prisma.payment.findMany({
       where: {
@@ -91,7 +93,7 @@ export async function generateMonthlyRentDues(req: AuthenticatedRequest, res: Re
         tenantId: tenant.id,
         branchId: tenant.room.branchId,
         monthlyRent: tenant.room.monthlyRent,
-        rentDueDay: tenant.room.branch.rentDueDay || 5,
+        joiningDate: tenant.joiningDate,
         now,
       });
 
@@ -345,13 +347,14 @@ export async function processPaymentSuccess(paymentId: string, transactionId: st
     });
 
     // Create Notification for owner
-    await prisma.notification.create({
-      data: {
-        title: 'Rent Payment Received',
-        message: `Advance rent of ₹${payment.amount} for ${payment.dueDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} received from ${payment.tenant?.name} (Room ${payment.tenant?.room.roomNumber}).`,
-        type: 'RENT_PAYMENT_RECEIVED',
-        userId: payment.branch.userId,
-      },
+    await createOwnerNotification({
+      title: 'Rent Payment Received',
+      message: `Advance rent of ₹${payment.amount} for ${payment.dueDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} received from ${payment.tenant?.name} (Room ${payment.tenant?.room.roomNumber}).`,
+      type: 'RENT_PAYMENT_RECEIVED',
+      userId: payment.branch.userId,
+      branchId: payment.branchId,
+      tenantId: payment.tenantId,
+      paymentId,
     });
   }
 
@@ -366,13 +369,14 @@ export async function processPaymentSuccess(paymentId: string, transactionId: st
     });
 
     // Create Notification for owner
-    await prisma.notification.create({
-      data: {
-        title: 'Admission Fee Paid',
-        message: `Admission payment of ₹${payment.amount} received from applicant ${payment.admissionApplication?.name}.`,
-        type: 'ADMISSION_PAYMENT_RECEIVED',
-        userId: payment.branch.userId,
-      },
+    await createOwnerNotification({
+      title: 'Joining Fee Paid',
+      message: `Joining fee of ₹${payment.amount} received from ${payment.admissionApplication?.name}.`,
+      type: 'ADMISSION_PAYMENT_RECEIVED',
+      userId: payment.branch.userId,
+      branchId: payment.branchId,
+      applicationId: payment.admissionApplicationId,
+      paymentId,
     });
   }
 

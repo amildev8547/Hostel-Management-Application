@@ -23,7 +23,7 @@ export async function ensureCurrentMonthRentInvoice(input: {
   tenantId: string;
   branchId: string;
   monthlyRent: number;
-  rentDueDay: number;
+  joiningDate: Date;
   now?: Date;
 }) {
   const now = input.now || new Date();
@@ -36,10 +36,18 @@ export async function ensureCurrentMonthRentInvoice(input: {
     },
   });
 
-  if (existing) return { payment: existing, created: false };
-
-  const dueDate = getRentDueDate(now, input.rentDueDay);
+  const joiningDay = new Date(input.joiningDate).getDate();
+  const dueDate = getRentDueDate(now, joiningDay);
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (existing) {
+    if (existing.status !== 'PAID' && existing.daysBilled == null) {
+      const status = dueDate < today ? 'OVERDUE' : 'PENDING';
+      const payment = await prisma.payment.update({ where: { id: existing.id }, data: { dueDate, status } });
+      return { payment, created: false };
+    }
+    return { payment: existing, created: false };
+  }
+
   const payment = await prisma.payment.create({
     data: {
       amount: input.monthlyRent,
@@ -52,6 +60,35 @@ export async function ensureCurrentMonthRentInvoice(input: {
   });
 
   return { payment, created: true };
+}
+
+export async function syncCurrentMonthRentDueDates(input: { userId?: string; branchId?: string; now?: Date }) {
+  const now = input.now || new Date();
+  const { start, nextStart } = getCalendarMonthRange(now);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const payments = await prisma.payment.findMany({
+    where: {
+      paymentType: 'RENT',
+      status: { in: ['PENDING', 'OVERDUE'] },
+      daysBilled: null,
+      tenantId: { not: null },
+      dueDate: { gte: start, lt: nextStart },
+      ...(input.branchId ? { branchId: input.branchId } : {}),
+      ...(input.userId ? { branch: { userId: input.userId } } : {}),
+    },
+    include: { tenant: { select: { joiningDate: true } } },
+  });
+
+  await Promise.all(
+    payments.map((payment) => {
+      if (!payment.tenant) return Promise.resolve(payment);
+      const dueDate = getRentDueDate(now, new Date(payment.tenant.joiningDate).getDate());
+      return prisma.payment.update({
+        where: { id: payment.id },
+        data: { dueDate, status: dueDate < today ? 'OVERDUE' : 'PENDING' },
+      });
+    }),
+  );
 }
 
 export async function markOverdueRentInvoices(userId: string) {

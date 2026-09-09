@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Surface, Button, useTheme, Card, List, RadioButton } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,11 +19,15 @@ interface MoveTenantScreenProps {
 }
 
 export default function MoveTenantScreen({ route, navigation }: MoveTenantScreenProps) {
-  const { tenantId, branchId } = route.params;
+  const { tenantId, branchId, readmit = false } = route.params;
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    navigation.setOptions({ title: readmit ? 'Admit Resident Again' : 'Move to Another Room' });
+  }, [navigation, readmit]);
 
   // Fetch tenant profile details
   const { data: tenant, isLoading: tenantLoading } = useQuery<any>({
@@ -36,15 +40,14 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
 
   // Fetch vacant/partial rooms in this branch
   const { data: rooms, isLoading: roomsLoading } = useQuery<any[]>({
-    queryKey: ['moveRoomsList', branchId],
+    queryKey: ['moveRoomsList', branchId, readmit],
     queryFn: async () => {
       const response = await apiClient.get('/rooms', { params: { branchId } });
       // Only show rooms that are not full or maintenance, and are different from current room
       return response.data.filter(
         (room: any) =>
-          room.id !== tenant?.roomId &&
-          room.status !== 'FULL' &&
-          room.status !== 'MAINTENANCE'
+          (readmit || room.id !== tenant?.roomId) &&
+          room.status !== 'FULL'
       );
     },
     enabled: !!tenant,
@@ -58,16 +61,20 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
 
     setIsSubmitting(true);
     try {
-      await apiClient.post(`/tenants/${tenantId}/move`, { newRoomId: selectedRoomId });
+      await apiClient.post(`/tenants/${tenantId}/${readmit ? 'readmit' : 'move'}`, { newRoomId: selectedRoomId });
       await invalidateHostelData(queryClient, {
         branchId,
         tenantId,
         roomId: tenant?.roomId,
       });
-      showAlert('The resident was moved to the selected room.', 'Success', () => navigation.pop(2)); // Go back to profile screen and refresh it
+      showAlert(
+        readmit ? 'The returning resident is active again in the selected room.' : 'The resident was moved to the selected room.',
+        'Success',
+        () => navigation.goBack(),
+      );
     } catch (err: any) {
       console.error(err);
-      showAlert(err.response?.data?.error || 'Could not move this resident.');
+      showAlert(err.response?.data?.error || (readmit ? 'Could not admit this resident again.' : 'Could not move this resident.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -85,17 +92,17 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         <Surface style={styles.summaryCard} elevation={1}>
-          <Text variant="titleMedium" style={{ fontWeight: '800' }}>Moving this person</Text>
+          <Text variant="titleMedium" style={{ fontWeight: '800' }}>{readmit ? 'Returning resident' : 'Moving this person'}</Text>
           <Text variant="bodyLarge" style={{ fontWeight: '600', color: theme.colors.primary, marginTop: 4 }}>
             {tenant.name}
           </Text>
           <Text variant="bodyMedium" style={{ color: '#64748B', marginTop: 2 }}>
-            Current room: {tenant.room.roomNumber} ({String(tenant.room.roomType).replace('Share', 'people')})
+            {readmit ? 'Previous room' : 'Current room'}: {tenant.room.roomNumber} ({String(tenant.room.roomType).replace('Share', 'people')})
           </Text>
         </Surface>
 
-        <Text variant="titleMedium" style={styles.sectionTitle}>Choose the new room</Text>
-        <Text style={styles.helpText}>Only rooms with a free bed are shown. Tap a room to select it.</Text>
+        <Text variant="titleMedium" style={styles.sectionTitle}>{readmit ? 'Choose a room' : 'Choose the new room'}</Text>
+        <Text style={styles.helpText}>Only rooms with a free place are shown. The room can have a different sharing type. Tap a room to select it.</Text>
 
         <RadioButton.Group onValueChange={(val) => setSelectedRoomId(val)} value={selectedRoomId}>
           {rooms && rooms.length > 0 ? (
@@ -137,7 +144,7 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
           disabled={isSubmitting || !selectedRoomId}
           loading={isSubmitting}
         >
-          Move to selected room
+          {readmit ? 'Admit to selected room' : 'Move to selected room'}
         </Button>
       </ScrollView>
     </View>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Linking, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Text, Surface, Card, Button, useTheme, SegmentedButtons, Divider, IconButton, ActivityIndicator, Portal, Modal } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -28,10 +28,10 @@ const formatRentMonth = (value: string | Date) =>
   new Date(value).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 
 export default function PaymentsDashboardScreen({ route, navigation }: PaymentsDashboardScreenProps) {
-  const { branchId } = route.params || {};
+  const { branchId, initialStatus } = route.params || {};
   const theme = useTheme();
   const queryClient = useQueryClient();
-  const [activeSegment, setActiveSegment] = useState('pending');
+  const [activeSegment, setActiveSegment] = useState(initialStatus || 'pending');
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Month/year being viewed — defaults to the current month. Collections can't exist
@@ -49,6 +49,10 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
   const [editingPayment, setEditingPayment] = useState<any>(null);
   const [editAmount, setEditAmount] = useState('');
   const [isSavingAmount, setIsSavingAmount] = useState(false);
+
+  useEffect(() => {
+    if (initialStatus) setActiveSegment(initialStatus);
+  }, [initialStatus]);
 
   const isCurrentMonth = selectedYear === currentYear && selectedMonth === currentMonth;
   const isFutureMonth = (monthIndex: number, year: number) =>
@@ -356,7 +360,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
         <Icon name="calendar-check-outline" size={24} color={theme.colors.primary} />
         <View style={{ flex: 1 }}>
           <Text style={styles.advanceNoticeTitle}>Rent is collected in advance</Text>
-          <Text style={styles.advanceNoticeText}>The amounts below are for {MONTH_NAMES[selectedMonth]} {selectedYear}.</Text>
+          <Text style={styles.advanceNoticeText}>The amounts below are for {MONTH_NAMES[selectedMonth]} {selectedYear}. Each resident's rent is due monthly on the day they joined (or the month's last day when needed).</Text>
         </View>
       </Surface>
 

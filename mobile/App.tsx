@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as NativeSplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider } from 'react-native-paper';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './src/services/AuthContext';
 import apiClient from './src/services/api';
 import AppNavigator from './src/navigation';
@@ -19,22 +20,69 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 30000,
+      staleTime: 15000,
       gcTime: 5 * 60 * 1000,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
+      refetchOnMount: 'always',
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+      refetchInterval: 20000,
+      refetchIntervalInBackground: false,
     },
   },
 });
 
 async function prepareInitialDashboard(signal: AbortSignal) {
-  const response = await apiClient.get('/dashboard', { signal });
-  queryClient.setQueryData(['dashboardMetrics'], response.data);
+  const now = new Date();
+  const initialRequests = await Promise.allSettled([
+    apiClient.get('/dashboard', { signal }),
+    apiClient.get('/branches', { signal }),
+    apiClient.get('/admissions', { params: { status: 'PENDING' }, signal }),
+    apiClient.get('/tenants', { params: { status: 'ACTIVE' }, signal }),
+    apiClient.get('/payments', { params: { status: 'PENDING', paymentType: 'RENT', month: now.getMonth() + 1, year: now.getFullYear() }, signal }),
+    apiClient.get('/payments', { params: { paymentType: 'RENT', month: now.getMonth() + 1, year: now.getFullYear() }, signal }),
+  ]);
+
+  const cacheKeys = [
+    ['dashboardMetrics'],
+    ['branchesList', ''],
+    ['admissionsList', '', 'PENDING'],
+    ['tenantsList', '', 'ACTIVE'],
+    ['paymentsList', undefined, 'pending', now.getMonth(), now.getFullYear()],
+    ['allPaymentsSummary', undefined, now.getMonth(), now.getFullYear()],
+  ];
+  initialRequests.forEach((result, index) => {
+    if (result.status === 'fulfilled') queryClient.setQueryData(cacheKeys[index], result.value.data);
+  });
+
+  const branchResult = initialRequests[1];
+  if (branchResult.status === 'fulfilled') {
+    const branches = (branchResult.value.data || []).slice(0, 10);
+    const branchRequests = await Promise.allSettled(
+      branches.flatMap((branch: any) => [
+        apiClient.get(`/branches/${branch.id}/dashboard`, { signal }),
+        apiClient.get('/rooms', { params: { branchId: branch.id }, signal }),
+      ]),
+    );
+    branchRequests.forEach((result, index) => {
+      if (result.status !== 'fulfilled') return;
+      const branch = branches[Math.floor(index / 2)];
+      queryClient.setQueryData(index % 2 === 0 ? ['branchDashboard', branch.id] : ['branchRooms', branch.id], result.value.data);
+    });
+  }
 }
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const finishSplash = useCallback(() => setShowSplash(false), []);
+
+  useEffect(() => {
+    const onAppStateChange = (status: AppStateStatus) => {
+      if (Platform.OS !== 'web') focusManager.setFocused(status === 'active');
+      if (status === 'active') void queryClient.refetchQueries({ type: 'active' });
+    };
+    const subscription = AppState.addEventListener('change', onAppStateChange);
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => NativeSplashScreen.hide());

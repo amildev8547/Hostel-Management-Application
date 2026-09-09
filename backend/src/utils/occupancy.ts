@@ -1,4 +1,5 @@
 import prisma from '../config/db';
+import { syncCurrentMonthRentDueDates } from './rentBilling';
 
 export async function updateRoomOccupancyStatus(roomId: string): Promise<string> {
   const room = await prisma.room.findUnique({
@@ -13,17 +14,11 @@ export async function updateRoomOccupancyStatus(roomId: string): Promise<string>
   const occupiedBeds = room.tenants.length;
   const reservedBeds = room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
   const unavailableBeds = occupiedBeds + reservedBeds;
-  let newStatus = room.status;
-
-  if (room.status !== 'MAINTENANCE' || unavailableBeds > 0) {
-    if (unavailableBeds === 0) {
-      newStatus = 'AVAILABLE';
-    } else if (unavailableBeds < room.capacity) {
-      newStatus = 'PARTIAL';
-    } else {
-      newStatus = 'FULL';
-    }
-  }
+  const newStatus = unavailableBeds === 0
+    ? 'AVAILABLE'
+    : unavailableBeds < room.capacity
+      ? 'PARTIAL'
+      : 'FULL';
 
   await prisma.room.update({
     where: { id: roomId },
@@ -71,13 +66,7 @@ export async function calculateBranchMetrics(branchId: string): Promise<BranchMe
 
     if (unavailableBeds === 0) vacantRooms++;
     else if (unavailableBeds < room.capacity) partialRooms++;
-    else if (unavailableBeds >= room.capacity) occupiedRooms++;
-    else if (room.status === 'MAINTENANCE') {
-      // In maintenance counts towards rooms but depends on active tenant status
-      if (room.tenants.length === 0) vacantRooms++;
-      else if (room.tenants.length < room.capacity) partialRooms++;
-      else occupiedRooms++;
-    }
+    else occupiedRooms++;
   });
 
   const vacantBeds = Math.max(0, totalBeds - occupiedBeds - reservedBeds);
@@ -88,6 +77,7 @@ export async function calculateBranchMetrics(branchId: string): Promise<BranchMe
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
+  await syncCurrentMonthRentDueDates({ branchId, now });
   await prisma.payment.updateMany({
     where: {
       branchId,

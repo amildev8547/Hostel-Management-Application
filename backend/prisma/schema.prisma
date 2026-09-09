@@ -8,62 +8,65 @@ generator client {
 }
 
 model User {
-  id            String         @id @default(auto()) @map("_id") @db.ObjectId
-  email         String         @unique
+  id            String            @id @default(auto()) @map("_id") @db.ObjectId
+  email         String            @unique
   password      String
   name          String
-  role          String         @default("OWNER")
+  role          String            @default("OWNER")
   branches      Branch[]
   notifications Notification[]
+  pushTokens    DevicePushToken[]
   settings      Setting[]
   bookings      Booking[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   @@map("users")
 }
 
 model Branch {
-  id                   String                 @id @default(auto()) @map("_id") @db.ObjectId
-  name                 String
-  address              String
-  phone                String
-  googleMapsLocation   String?
-  rentDueDay           Int                    @default(5)
-  status               String                 @default("ACTIVE") // ACTIVE, INACTIVE
-  userId               String                 @db.ObjectId
-  user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rooms                Room[]
+  id                    String                     @id @default(auto()) @map("_id") @db.ObjectId
+  name                  String
+  address               String
+  phone                 String
+  googleMapsLocation    String?
+  rentDueDay            Int                        @default(5)
+  status                String                     @default("ACTIVE") // ACTIVE, INACTIVE
+  userId                String                     @db.ObjectId
+  user                  User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rooms                 Room[]
   admissionApplications AdmissionApplication[]
-  payments             Payment[]
-  bookings             Booking[]
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
+  payments              Payment[]
+  bookings              Booking[]
+  admissionFormTokens   AdmissionFormToken[]
+  submissionGuards      AdmissionSubmissionGuard[]
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
 
   @@map("branches")
 }
 
 model Room {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
   roomNumber   String
   floor        String
-  roomType     String   // 2 Share, 3 Share, 4 Share, 5 Share, Custom
+  roomType     String // 2 Share, 3 Share, 4 Share, 5 Share, Custom
   capacity     Int
   monthlyRent  Float
   admissionFee Float
-  status       String   @default("AVAILABLE") // AVAILABLE, PARTIAL, FULL, MAINTENANCE
-  branchId     String   @db.ObjectId
-  branch       Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  status       String    @default("AVAILABLE") // AVAILABLE, PARTIAL, FULL (calculated automatically)
+  branchId     String    @db.ObjectId
+  branch       Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
   tenants      Tenant[]
   bookings     Booking[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@map("rooms")
 }
 
 model Tenant {
-  id                   String      @id @default(auto()) @map("_id") @db.ObjectId
+  id                   String     @id @default(auto()) @map("_id") @db.ObjectId
   name                 String
   phone                String
   whatsappNumber       String
@@ -75,17 +78,17 @@ model Tenant {
   workLocation         String
   joiningDate          DateTime
   leavingDate          DateTime?
-  status               String      @default("ACTIVE") // ACTIVE, VACATED
+  status               String     @default("ACTIVE") // ACTIVE, VACATED
   profilePhotoUrl      String?
   aadhaarFrontUrl      String?
   aadhaarBackUrl       String?
-  roomId               String      @db.ObjectId
-  room                 Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId               String     @db.ObjectId
+  room                 Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
   payments             Payment[]
   documents            Document[]
   booking              Booking?
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 
   @@map("tenants")
 }
@@ -107,8 +110,8 @@ model Booking {
   room                   Room                  @relation(fields: [roomId], references: [id], onDelete: Cascade)
   admissionApplicationId String?               @unique @db.ObjectId
   admissionApplication   AdmissionApplication? @relation(fields: [admissionApplicationId], references: [id], onDelete: SetNull)
-  tenantId                String?               @unique @db.ObjectId
-  tenant                  Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId               String?               @unique @db.ObjectId
+  tenant                 Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
 
@@ -136,7 +139,7 @@ model AdmissionApplication {
   preferredRoomType    String
   status               String     @default("PENDING") // PENDING, APPROVED, REJECTED
   paymentStatus        String     @default("PENDING") // PENDING, PAID
-  paymentId            String?    // Owner-entered/manual payment reference
+  paymentId            String? // Owner-entered/manual payment reference
   branchId             String     @db.ObjectId
   branch               Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
   payments             Payment[]
@@ -152,13 +155,13 @@ model Payment {
   id                     String                @id @default(auto()) @map("_id") @db.ObjectId
   amount                 Float
   status                 String                @default("PENDING") // PAID, PENDING, OVERDUE
-  paymentType            String                // RENT, ADMISSION
-  daysBilled             Int?                  // Number of days this RENT invoice covers (for partial stays)
-  originalAmount         Float?                // Prorated amount before discount was applied
+  paymentType            String // RENT, ADMISSION
+  daysBilled             Int? // Number of days this RENT invoice covers (for partial stays)
+  originalAmount         Float? // Prorated amount before discount was applied
   discountAmount         Float                 @default(0)
   dueDate                DateTime
   paidDate               DateTime?
-  paymentMethod          String?               // UPI, CASH, BANK
+  paymentMethod          String? // UPI, CASH, BANK
   transactionId          String?
   paymentLinkId          String?
   paymentLinkUrl         String?
@@ -178,7 +181,7 @@ model Payment {
 model Document {
   id                     String                @id @default(auto()) @map("_id") @db.ObjectId
   fileName               String
-  fileType               String                // PROFILE_PHOTO, AADHAAR_FRONT, AADHAAR_BACK
+  fileType               String // PROFILE_PHOTO, AADHAAR_FRONT, AADHAAR_BACK
   s3Key                  String
   s3Bucket               String
   tenantId               String?               @db.ObjectId
@@ -192,16 +195,59 @@ model Document {
 }
 
 model Notification {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  title         String
+  message       String
+  isRead        Boolean  @default(false)
+  type          String // NEW_ADMISSION, ADMISSION_PAYMENT_RECEIVED, RENT_PAYMENT_RECEIVED, ADMISSION_APPROVED, TENANT_VACATED
+  userId        String   @db.ObjectId
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branchId      String?  @db.ObjectId
+  tenantId      String?  @db.ObjectId
+  applicationId String?  @db.ObjectId
+  paymentId     String?  @db.ObjectId
+  createdAt     DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model AdmissionFormToken {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  tokenHash    String    @unique
+  branchId     String    @db.ObjectId
+  branch       Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  bookingToken String?
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@map("admission_form_tokens")
+}
+
+model AdmissionSubmissionGuard {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  branchId      String   @db.ObjectId
+  branch        Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  phone         String
+  applicationId String?  @db.ObjectId
+  createdAt     DateTime @default(now())
+
+  @@unique([branchId, phone])
+  @@map("admission_submission_guards")
+}
+
+model DevicePushToken {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  title     String
-  message   String
-  isRead    Boolean  @default(false)
-  type      String   // NEW_ADMISSION, ADMISSION_PAYMENT_RECEIVED, RENT_PAYMENT_RECEIVED, ADMISSION_APPROVED, TENANT_VACATED
+  token     String   @unique
+  platform  String
+  active    Boolean  @default(true)
   userId    String   @db.ObjectId
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@map("notifications")
+  @@map("device_push_tokens")
 }
 
 model Setting {

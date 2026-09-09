@@ -7,6 +7,7 @@ import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigat
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { applyLocalNotificationState, rememberNotificationHidden, rememberNotificationsSeen } from '../../services/storage';
+import * as Notifications from 'expo-notifications';
 
 type NotificationsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Notifications'>;
 type NotificationData = { notifications: any[]; unreadCount: number };
@@ -27,6 +28,7 @@ export default function NotificationsScreen({ navigation }: { navigation: Notifi
   const handleMarkAllRead = async () => {
     await rememberNotificationsSeen(notifications.map((item) => item.id));
     updateCache((current) => ({ notifications: current.notifications.map((item) => ({ ...item, isRead: true })), unreadCount: 0 }));
+    await Promise.allSettled([Notifications.dismissAllNotificationsAsync(), Notifications.setBadgeCountAsync(0)]);
     try { await apiClient.post('/notifications/all/read'); } catch { /* Device state keeps the badge cleared while the server is unavailable. */ }
   };
 
@@ -51,6 +53,8 @@ export default function NotificationsScreen({ navigation }: { navigation: Notifi
   const handleRemove = async (item: any) => {
     await rememberNotificationHidden(item.id);
     updateCache((current) => ({ notifications: current.notifications.filter((entry) => entry.id !== item.id), unreadCount: Math.max(0, current.unreadCount - (item.isRead ? 0 : 1)) }));
+    const shown = await Notifications.getPresentedNotificationsAsync().catch(() => []);
+    await Promise.allSettled(shown.filter((notification) => notification.request.content.data?.notificationId === item.id).map((notification) => Notifications.dismissNotificationAsync(notification.request.identifier)));
     try { await apiClient.delete(`/notifications/${item.id}`); } catch { /* Removal remains saved on this device and will not reappear. */ }
   };
 

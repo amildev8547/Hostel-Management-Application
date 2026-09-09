@@ -26,7 +26,6 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [statusVal, setStatusVal] = useState('AVAILABLE');
   const [roomTypeVal, setRoomTypeVal] = useState('2 Share');
 
   const { control, handleSubmit, setValue, formState: { errors } } = useForm({
@@ -38,7 +37,6 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
       capacity: 2,
       monthlyRent: 5000,
       admissionFee: 1500,
-      status: 'AVAILABLE',
     },
   });
 
@@ -66,8 +64,6 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
           setValue('capacity', data.capacity);
           setValue('monthlyRent', data.monthlyRent);
           setValue('admissionFee', data.admissionFee);
-          setValue('status', data.status);
-          setStatusVal(data.status);
           setRoomTypeVal(data.roomType);
         })
         .catch((err) => {
@@ -85,7 +81,6 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
     const payload = {
       ...data,
       branchId,
-      status: statusVal,
       roomType: roomTypeVal,
     };
 
@@ -235,19 +230,6 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
             )}
           />
           {errors.admissionFee && <HelperText type="error">{errors.admissionFee.message}</HelperText>}
-
-          {/* Status Options */}
-          <Text variant="labelMedium" style={styles.sectionLabel}>Room Status</Text>
-          <View style={{ marginBottom: 20 }}>
-            <SegmentedButtons
-              value={statusVal}
-              onValueChange={setStatusVal}
-              buttons={[
-                { value: 'AVAILABLE', label: 'Ready to use' },
-                { value: 'MAINTENANCE', label: 'Not usable' },
-              ]}
-            />
-          </View>
 
           <Button
             mode="contained"

@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Share, Clipboard, FlatList } from 'react-native';
 import { Text, Surface, Card, Button, useTheme, SegmentedButtons, List, Divider } from 'react-native-paper';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { occupancyColors, occupancyLabels } from '../../theme';
-import { showAlert } from '../../utils/alerts';
+import { showAlert, showConfirm } from '../../utils/alerts';
 import { getApplyUrl } from '../../utils/backendUrl';
+import { invalidateHostelData } from '../../utils/queryInvalidation';
 
 type BranchDashboardRouteProp = RouteProp<RootStackParamList, 'BranchDashboard'>;
 type BranchDashboardNavigationProp = StackNavigationProp<RootStackParamList, 'BranchDashboard'>;
@@ -27,12 +28,13 @@ const roomFilterLabels: Record<RoomFilter, string> = {
   vacantBeds: 'Rooms with a free bed',
   AVAILABLE: 'Empty rooms',
   PARTIAL: 'Rooms with some beds free',
-  FULL: 'Rooms with no beds free',
+  FULL: 'Full rooms',
 };
 
 export default function BranchDashboardScreen({ route, navigation }: BranchDashboardScreenProps) {
   const { branchId } = route.params;
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const [activeSegment, setActiveSegment] = useState('overview');
   const [roomFilter, setRoomFilter] = useState<RoomFilter>('all');
 
@@ -92,6 +94,29 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
 
   const handleShowQRCode = () => {
     navigation.navigate('QRCode', { branchId, branchName: dashboardData?.branch?.name || route.params.branchName });
+  };
+
+  useEffect(() => navigation.addListener('beforeRemove', (event) => {
+    if (activeSegment !== 'rooms') return;
+    event.preventDefault();
+    setRoomFilter('all');
+    setActiveSegment('overview');
+  }), [activeSegment, navigation]);
+
+  const handleDeleteBranch = () => {
+    showConfirm(
+      'Delete this hostel branch permanently? Its rooms, resident records, bookings, applications, and payments will also be removed.',
+      async () => {
+        try {
+          await apiClient.delete(`/branches/${branchId}`);
+          await invalidateHostelData(queryClient, { branchId });
+          showAlert('Hostel branch deleted.', 'Success', () => navigation.navigate('Main', { screen: 'Branches' }));
+        } catch (err: any) {
+          showAlert(err.response?.data?.error || 'Could not delete this hostel branch.');
+        }
+      },
+      { title: 'Delete hostel branch', confirmText: 'Delete', destructive: true },
+    );
   };
 
   if (dashboardLoading) {
@@ -199,7 +224,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
                   <Text variant="titleMedium" style={{ fontWeight: '800', color: theme.colors.error }}>
                     {metrics.occupiedRooms}
                   </Text>
-                  <Text variant="bodySmall" style={styles.roomCellLabel}>No beds</Text>
+                  <Text variant="bodySmall" style={styles.roomCellLabel}>Full</Text>
                 </TouchableOpacity>
               </View>
             </Surface>
@@ -208,18 +233,21 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
             <Surface style={styles.statsCard} elevation={1}>
               <Text variant="titleMedium" style={styles.cardTitle}>Branch Collections</Text>
               <View style={styles.paymentsGrid}>
-                <View style={styles.paymentCell}>
+                <TouchableOpacity style={styles.paymentCell} onPress={() => navigation.navigate('PaymentsDashboard', { branchId, initialStatus: 'paid' })} accessibilityRole="button">
                   <Text style={[styles.paymentLabel, { color: (theme.colors as any).success }]}>Received</Text>
                   <Text variant="titleMedium" style={{ fontWeight: '700' }}>₹{metrics.thisMonthPaid}</Text>
-                </View>
-                <View style={[styles.paymentCell, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#E2E8F0' }]}>
+                  <Text style={styles.tapSummary}>View</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.paymentCell, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#E2E8F0' }]} onPress={() => navigation.navigate('PaymentsDashboard', { branchId, initialStatus: 'pending' })} accessibilityRole="button">
                   <Text style={[styles.paymentLabel, { color: (theme.colors as any).warning }]}>Still due</Text>
                   <Text variant="titleMedium" style={{ fontWeight: '700' }}>₹{metrics.pendingPayments}</Text>
-                </View>
-                <View style={styles.paymentCell}>
+                  <Text style={styles.tapSummary}>View</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.paymentCell} onPress={() => navigation.navigate('PaymentsDashboard', { branchId, initialStatus: 'overdue' })} accessibilityRole="button">
                   <Text style={[styles.paymentLabel, { color: theme.colors.error }]}>Late</Text>
                   <Text variant="titleMedium" style={{ fontWeight: '700' }}>₹{metrics.overduePayments}</Text>
-                </View>
+                  <Text style={styles.tapSummary}>View</Text>
+                </TouchableOpacity>
               </View>
             </Surface>
 
@@ -234,6 +262,9 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
               <ActionRow icon="cash-multiple" title="Rent payments" detail="Check the current month's advance rent" onPress={() => navigation.navigate('PaymentsDashboard', { branchId })} />
               <ActionRow icon="pencil" title="Edit branch" detail="Change branch information" onPress={() => navigation.navigate('BranchForm', { branchId })} last />
             </Surface>
+            <Button mode="outlined" icon="delete-outline" textColor={theme.colors.error} style={styles.deleteBranchButton} onPress={handleDeleteBranch}>
+              Delete this hostel branch
+            </Button>
           </>
         ) : (
           /* Rooms List Segment */
@@ -243,8 +274,9 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
                 <Text variant="titleLarge" style={styles.resultsTitle}>{roomFilterLabels[roomFilter]}</Text>
                 <Text style={styles.resultsCount}>{filteredRooms.length} {filteredRooms.length === 1 ? 'room' : 'rooms'} found</Text>
               </View>
-              {roomFilter !== 'all' && <Button mode="text" onPress={() => setRoomFilter('all')}>Show all</Button>}
+              <Button mode="contained" icon="plus" onPress={() => navigation.navigate('RoomForm', { branchId })}>Add room</Button>
             </View>
+            {roomFilter !== 'all' && <Button mode="text" style={styles.showAllButton} onPress={() => setRoomFilter('all')}>Show all rooms</Button>}
             {metrics.reservedBeds > 0 && (
               <TouchableOpacity style={styles.reservedNotice} onPress={() => navigation.navigate('BookingList')} accessibilityRole="button">
                 <Icon name="bed" size={21} color="#7C3AED" />
@@ -255,7 +287,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
               {(['all', 'AVAILABLE', 'PARTIAL', 'FULL'] as RoomFilter[]).map((filter) => (
                 <Button key={filter} mode={roomFilter === filter ? 'contained' : 'outlined'} compact={false} onPress={() => setRoomFilter(filter)} style={styles.filterButton}>
-                  {filter === 'all' ? 'All' : filter === 'AVAILABLE' ? 'Empty' : filter === 'PARTIAL' ? 'Some free' : 'No beds free'}
+                  {filter === 'all' ? 'All' : filter === 'AVAILABLE' ? 'Empty' : filter === 'PARTIAL' ? 'Some free' : 'Full'}
                 </Button>
               ))}
             </ScrollView>
@@ -392,12 +424,15 @@ const styles = StyleSheet.create({
   paymentCell: {
     flex: 1,
     alignItems: 'center',
+    minHeight: 76,
+    justifyContent: 'center',
   },
   paymentLabel: {
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 4,
   },
+  tapSummary: { color: '#4F46E5', fontSize: 11, fontWeight: '700', marginTop: 4 },
   sectionTitle: {
     fontWeight: '800',
     color: '#0F172A',
@@ -405,6 +440,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   actionPanel: { backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', marginBottom: 8 },
+  deleteBranchButton: { borderColor: '#EF4444', borderRadius: 12, marginTop: 10, marginBottom: 12 },
+  showAllButton: { alignSelf: 'flex-start', marginBottom: 4 },
   actionRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 11 },
   actionRowBorder: { borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   actionIcon: { width: 44, height: 44, borderRadius: 13, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

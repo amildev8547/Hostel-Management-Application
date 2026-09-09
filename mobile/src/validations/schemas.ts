@@ -13,5 +13,4 @@ export const roomFormSchema = z.object({
   capacity: z.number().int().min(1, 'Capacity must be at least 1'),
   monthlyRent: z.number().min(0, 'Monthly rent must be a positive number'),
   admissionFee: z.number().min(0, 'Admission fee must be a positive number'),
-  status: z.enum(['AVAILABLE', 'PARTIAL', 'FULL', 'MAINTENANCE']).default('AVAILABLE'),
 });

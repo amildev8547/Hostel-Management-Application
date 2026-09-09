@@ -63,7 +63,6 @@ export async function createBooking(req: AuthenticatedRequest, res: Response) {
     if (!branch || branch.userId !== userId) return res.status(404).json({ error: 'Hostel branch not found' });
     const availability = await getRoomBedAvailability(roomId);
     if (!availability || availability.room.branchId !== branchId) return res.status(404).json({ error: 'Room not found in this branch' });
-    if (availability.room.status === 'MAINTENANCE') return res.status(400).json({ error: 'This room is not currently usable' });
     const availableBeds = availability.beds.filter((bed) => bed.status === 'AVAILABLE');
     if (availableBeds.length === 0) return res.status(409).json({ error: 'This room has no available beds. Please choose another room.' });
 

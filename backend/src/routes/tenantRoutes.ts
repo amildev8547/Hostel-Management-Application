@@ -7,6 +7,7 @@ import {
   vacateTenant,
   deleteTenant,
   createCustomRentInvoice,
+  readmitTenant,
 } from '../controllers/tenantController';
 import { authenticateJWT } from '../middlewares/auth';
 import { validate, tenantEditSchema, customRentSchema } from '../middlewares/validation';
@@ -20,6 +21,7 @@ router.get('/:id', getTenantById);
 router.put('/:id', validate(tenantEditSchema), updateTenant);
 router.post('/:id/move', moveTenant);
 router.post('/:id/vacate', vacateTenant);
+router.post('/:id/readmit', readmitTenant);
 router.post('/:id/rent', validate(customRentSchema), createCustomRentInvoice);
 router.delete('/:id', deleteTenant);
 

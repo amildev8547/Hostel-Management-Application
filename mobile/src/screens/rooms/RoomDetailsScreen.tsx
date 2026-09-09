@@ -85,7 +85,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
           </View>
           <View style={[styles.badge, { backgroundColor: statusColor }]}>
             <Text style={styles.badgeText}>
-              {room.status === 'AVAILABLE' ? 'Empty' : room.status === 'PARTIAL' ? 'Some beds free' : room.status === 'FULL' ? 'No beds free' : 'Not usable'}
+              {room.status === 'AVAILABLE' ? 'Empty' : room.status === 'PARTIAL' ? 'Some beds free' : room.status === 'FULL' ? 'Full' : 'Availability updating'}
             </Text>
           </View>
         </View>

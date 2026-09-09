@@ -45,12 +45,72 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
     queryFn: async () => {
       const response = await apiClient.get('/rooms', { params: { branchId: application.branchId } });
       // Only show rooms with vacancy
-      return response.data.filter((r: any) => r.vacant > 0 && r.status !== 'MAINTENANCE');
+      return response.data.filter((r: any) => r.vacant > 0);
     },
     enabled: !!application && application.status === 'PENDING',
   });
 
+  const admissionPayment = application?.payments?.find((payment: any) => payment.paymentType === 'ADMISSION');
+  const joiningFeePaid = application?.paymentStatus === 'PAID' && admissionPayment?.status === 'PAID';
+
+  const changeJoiningFeeStatus = (paymentStatus: 'PAID' | 'PENDING', paymentMethod: 'CASH' | 'UPI' = 'CASH') => {
+    const markingPaid = paymentStatus === 'PAID';
+    showConfirm(
+      markingPaid
+        ? `Confirm that ${admissionPayment?.amount != null ? `₹${admissionPayment.amount}` : 'the joining fee'} was received by ${paymentMethod === 'CASH' ? 'cash' : 'UPI or bank transfer'}?`
+        : 'Change the joining fee back to “Not paid”? The application cannot be approved until the fee is marked paid again.',
+      async () => {
+        setIsProcessing(true);
+        try {
+          await apiClient.patch(`/admissions/${applicationId}/fee-status`, { paymentStatus, paymentMethod });
+          await invalidateHostelData(queryClient, { branchId: application.branchId, applicationId });
+          await refetch();
+          showAlert(
+            markingPaid
+              ? 'Joining fee marked as paid. You can now approve the admission.'
+              : 'Joining fee marked as not paid.',
+          );
+        } catch (err: any) {
+          showAlert(err.response?.data?.error || 'Could not change the joining fee status.');
+        } finally {
+          setIsProcessing(false);
+        }
+      },
+      {
+        title: markingPaid ? 'Mark joining fee paid' : 'Mark joining fee not paid',
+        confirmText: markingPaid ? 'Confirm received' : 'Change status',
+        destructive: !markingPaid,
+      },
+    );
+  };
+
+  const handleDeleteApplication = () => {
+    showConfirm(
+      `Delete ${application.name}’s application? Its joining-fee record and uploaded document records will also be removed. If this came from an advance booking, the reservation and secure link will stay active for a corrected submission.`,
+      async () => {
+        setIsProcessing(true);
+        try {
+          const response = await apiClient.delete(`/admissions/${applicationId}`);
+          await invalidateHostelData(queryClient, { branchId: application.branchId, applicationId });
+          await queryClient.invalidateQueries({ queryKey: ['bookings'] });
+          queryClient.removeQueries({ queryKey: ['admissionDetails', applicationId] });
+          showAlert(response.data?.message || 'Application deleted.', 'Application deleted', () => navigation.goBack());
+        } catch (err: any) {
+          showAlert(err.response?.data?.error || 'Could not delete this application.');
+        } finally {
+          setIsProcessing(false);
+        }
+      },
+      { title: 'Delete application?', confirmText: 'Delete application', destructive: true },
+    );
+  };
+
   const handleProcess = (status: 'APPROVED' | 'REJECTED') => {
+    if (status === 'APPROVED' && !joiningFeePaid) {
+      showAlert('The joining fee must be marked as paid before this admission can be approved.');
+      return;
+    }
+
     if (status === 'APPROVED' && !selectedRoomId) {
       showAlert('Please select an available room to allocate the applicant.');
       return;
@@ -81,15 +141,6 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
         setIsProcessing(false);
       }
     };
-
-    if (status === 'APPROVED' && application.paymentStatus !== 'PAID') {
-      showConfirm(
-        'Warning: The applicant has not paid the admission fee. Proceed with approval anyway?',
-        proceed,
-        { title: 'Unpaid Admission Fee', confirmText: 'Proceed' }
-      );
-      return;
-    }
 
     proceed();
   };
@@ -128,7 +179,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
           <View style={styles.headerInfo}>
             <Text variant="headlineSmall" style={styles.applicantName}>{application.name}</Text>
             <Text variant="bodyMedium" style={{ color: '#64748B', marginTop: 4 }}>
-              Wants to stay at: {application.branch.name}
+              Wants to stay at: {application.branch?.name || 'Branch not available'}
             </Text>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
               <View
@@ -164,7 +215,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
                 style={[
                   styles.statusBadge,
                   {
-                    backgroundColor: application.paymentStatus === 'PAID' ? '#D1FAE5' : '#FEF3C7',
+                    backgroundColor: joiningFeePaid ? '#D1FAE5' : '#FEF3C7',
                   },
                 ]}
               >
@@ -172,16 +223,57 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
                   style={{
                     fontSize: 10,
                     fontWeight: '800',
-                    color: application.paymentStatus === 'PAID' ? '#065F46' : '#D97706',
+                    color: joiningFeePaid ? '#065F46' : '#D97706',
                   }}
                 >
-                  Joining fee: {application.paymentStatus === 'PAID' ? 'Paid' : 'Not paid'}
+                  Joining fee: {joiningFeePaid ? 'Paid' : 'Not paid'}
                 </Text>
               </View>
             </View>
           </View>
         </View>
       </Surface>
+
+      {(
+        <Surface
+          style={[styles.feeCard, joiningFeePaid && styles.feeCardPaid]}
+          elevation={1}
+        >
+          <View style={styles.feeHeading}>
+            <Icon name={joiningFeePaid ? 'cash-check' : 'cash-clock'} size={25} color={joiningFeePaid ? '#059669' : '#D97706'} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.feeTitle, joiningFeePaid && styles.feeTitlePaid]}>
+                Joining fee: {joiningFeePaid ? 'Paid' : 'Not paid'}
+              </Text>
+              <Text style={styles.feeAmount}>₹{admissionPayment?.amount ?? 0}</Text>
+            </View>
+          </View>
+          <Text style={styles.feeHelp}>
+            {joiningFeePaid
+              ? 'If this was marked by mistake, the admin can change it back to not paid.'
+              : application.status === 'PENDING'
+                ? 'After checking that the money was actually received, choose how it was paid. Admission approval stays locked until then.'
+                : 'The admin can correct this fee status without changing the resident or application status.'}
+          </Text>
+          {joiningFeePaid ? (
+            <Button
+              mode="outlined"
+              icon="undo"
+              textColor={theme.colors.error}
+              disabled={isProcessing}
+              onPress={() => changeJoiningFeeStatus('PENDING')}
+              style={styles.feeButton}
+            >
+              Change to not paid
+            </Button>
+          ) : (
+            <>
+              <Button mode="contained" icon="cash" disabled={isProcessing} onPress={() => changeJoiningFeeStatus('PAID', 'CASH')} style={styles.feeButton}>Received by cash</Button>
+              <Button mode="outlined" icon="bank-transfer" disabled={isProcessing} onPress={() => changeJoiningFeeStatus('PAID', 'UPI')} style={styles.feeButton}>Received by UPI / bank</Button>
+            </>
+          )}
+        </Surface>
+      )}
 
       {/* 2. Applicant details */}
       <Text variant="titleMedium" style={styles.sectionTitle}>Personal and contact information</Text>
@@ -307,7 +399,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
               icon="check"
               onPress={() => handleProcess('APPROVED')}
               style={[styles.actionBtn, { backgroundColor: (theme.colors as any).success }]}
-              disabled={isProcessing || !selectedRoomId}
+              disabled={isProcessing || !selectedRoomId || !joiningFeePaid}
               loading={isProcessing}
             >
               Accept and assign room
@@ -343,6 +435,20 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
             This application was {application.status === 'APPROVED' ? 'accepted' : 'not accepted'}.
           </Text>
         </Surface>
+      )}
+
+      {application.status !== 'APPROVED' && (
+        <Button
+          mode="outlined"
+          icon="delete-outline"
+          textColor={theme.colors.error}
+          style={styles.deleteApplicationButton}
+          contentStyle={styles.deleteApplicationButtonContent}
+          disabled={isProcessing}
+          onPress={handleDeleteApplication}
+        >
+          Delete this application
+        </Button>
       )}
 
       <View style={{ height: 40 }} />
@@ -432,6 +538,14 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 4,
   },
+  feeCard: { marginHorizontal: 16, marginBottom: 16, padding: 16, borderRadius: 14, backgroundColor: '#FFFBEB' },
+  feeCardPaid: { backgroundColor: '#ECFDF5' },
+  feeHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  feeTitle: { color: '#78350F', fontSize: 15, fontWeight: '800' },
+  feeTitlePaid: { color: '#065F46' },
+  feeAmount: { color: '#0F172A', fontSize: 20, fontWeight: '900', marginTop: 2 },
+  feeHelp: { color: '#57534E', fontSize: 13, lineHeight: 19, marginTop: 10, marginBottom: 8 },
+  feeButton: { borderRadius: 10, marginTop: 8 },
   sectionTitle: {
     fontWeight: '800',
     color: '#0F172A',
@@ -508,6 +622,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  deleteApplicationButton: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderColor: '#EF4444',
+    borderRadius: 12,
+  },
+  deleteApplicationButtonContent: {
+    minHeight: 50,
   },
   radioRow: {
     flexDirection: 'row',

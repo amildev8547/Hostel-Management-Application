@@ -46,7 +46,6 @@ export const roomSchema = z.object({
     capacity: z.number().int().min(1, 'Capacity must be at least 1'),
     monthlyRent: z.number().min(0, 'Monthly rent must be positive'),
     admissionFee: z.number().min(0, 'Admission fee must be positive'),
-    status: z.enum(['AVAILABLE', 'PARTIAL', 'FULL', 'MAINTENANCE']).default('AVAILABLE'),
   }),
 });
 
@@ -70,29 +69,36 @@ function isValidDateString(val: string) {
   return !isNaN(Date.parse(val));
 }
 
+const admissionImageSchema = z
+  .string()
+  .min(100, 'A valid image is required')
+  .max(8_000_000, 'Image is too large')
+  .regex(/^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=\r\n]+$/i, 'Only JPG, PNG or WEBP images are allowed');
+
 export const publicAdmissionFormSchema = z.object({
   body: z
     .object({
-      name: z.string().min(2, 'Full name must be at least 2 characters'),
+      name: z.string().trim().min(2, 'Full name must be at least 2 characters').max(100),
       phone: z.string().regex(/^\d{10}$/, 'Phone must be exactly 10 digits'),
       whatsappNumber: z.string().regex(/^\d{10}$/, 'WhatsApp number must be exactly 10 digits'),
-      address: z.string().min(5, 'Address must be at least 5 characters'),
-      guardianName: z.string().min(2, 'Guardian name is required'),
+      address: z.string().trim().min(5, 'Address must be at least 5 characters').max(1000),
+      guardianName: z.string().trim().min(2, 'Guardian name is required').max(100),
       guardianPhone: z.string().regex(/^\d{10}$/, 'Guardian phone must be exactly 10 digits'),
-      nearestPoliceStation: z.string().min(2, 'Nearest police station is required'),
-      occupation: z.string().min(2, 'Occupation is required'),
-      workLocation: z.string().min(2, 'Work location is required'),
-      preferredRoomType: z.string().min(1, 'Preferred room type is required'),
+      nearestPoliceStation: z.string().trim().min(2, 'Nearest police station is required').max(200),
+      occupation: z.string().trim().min(2, 'Occupation is required').max(200),
+      workLocation: z.string().trim().min(2, 'Work location is required').max(300),
+      preferredRoomType: z.string().trim().min(1, 'Preferred room type is required').max(100),
       joiningDate: z.string().refine(isValidDateString, { message: 'Invalid joining date format' }),
       leavingDate: z.string().optional().refine((val) => !val || isValidDateString(val), {
         message: 'Invalid expected leaving date format',
       }),
-      profilePhoto: z.string().min(10, 'Profile photo base64 is required'),
-      aadhaarFront: z.string().min(10, 'Aadhaar front base64 is required'),
-      aadhaarBack: z.string().min(10, 'Aadhaar back base64 is required'),
-      notes: z.string().optional(),
+      profilePhoto: admissionImageSchema,
+      aadhaarFront: admissionImageSchema,
+      aadhaarBack: admissionImageSchema,
+      notes: z.string().trim().max(2000).optional(),
       branchId: z.string().min(1, 'Branch is required'),
       bookingToken: z.string().optional(),
+      formToken: z.string().regex(/^[a-f0-9]{64}$/i, 'Refresh the form and try again'),
       // Admission fee is computed server-side from room pricing; client value (if sent) is ignored.
       amount: z.number().optional(),
     })
@@ -130,6 +136,13 @@ export const customRentSchema = z.object({
     dueDate: z.string().optional().refine((val) => !val || !isNaN(Date.parse(val)), {
       message: 'Invalid due date format',
     }),
+  }),
+});
+
+export const admissionFeeStatusSchema = z.object({
+  body: z.object({
+    paymentStatus: z.enum(['PAID', 'PENDING']),
+    paymentMethod: z.enum(['CASH', 'UPI', 'BANK']).optional(),
   }),
 });
 

@@ -1,16 +1,21 @@
 import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
-import { uploadFile } from '../services/cloudinary';
+import { deleteUploadedFile, UploadedFile, uploadFile } from '../services/cloudinary';
 import { updateRoomOccupancyStatus } from '../utils/occupancy';
 import { buildUpiPaymentUrl, getSettingValue } from '../utils/upi';
 import { ensureCurrentMonthRentInvoice, getCalendarMonthRange } from '../utils/rentBilling';
+import { createOwnerNotification } from '../services/notifications';
+import { claimAdmissionFormToken } from '../services/admissionFormSecurity';
 
 // Public endpoint: Submit application
 export async function submitAdmissionApplication(req: Request, res: Response) {
   let currentStep = 'validating application';
   let claimedBookingId: string | null = null;
   let bookingApplicationCreated = false;
+  let submissionGuardId: string | null = null;
+  let createdApplicationId: string | null = null;
+  const uploadedFiles: UploadedFile[] = [];
   const {
     name,
     phone,
@@ -30,6 +35,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     notes,
     branchId,
     bookingToken,
+    formToken,
   } = req.body;
 
   try {
@@ -57,6 +63,38 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
       return res.status(404).json({ error: 'Selected branch does not exist' });
     }
 
+    currentStep = 'verifying the secure form session';
+    const validFormSession = await claimAdmissionFormToken({
+      token: formToken,
+      branchId: selectedBranchId,
+      bookingToken: booking?.secureToken,
+    });
+    if (!validFormSession) {
+      return res.status(409).json({ error: 'This form was already submitted or has expired. Refresh the form to continue.' });
+    }
+
+    currentStep = 'checking for an earlier submission';
+    const existingApplication = await prisma.admissionApplication.findFirst({
+      where: { branchId: selectedBranchId, phone: selectedPhone },
+      select: { id: true },
+    });
+    if (existingApplication) {
+      return res.status(409).json({
+        error: 'An admission form using this phone number was already submitted for this hostel. Contact the hostel owner if it needs correction.',
+      });
+    }
+    try {
+      const guard = await prisma.admissionSubmissionGuard.create({
+        data: { branchId: selectedBranchId, phone: selectedPhone },
+      });
+      submissionGuardId = guard.id;
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        return res.status(409).json({ error: 'An admission form using this phone number was already submitted for this hostel. Contact the hostel owner if it needs correction.' });
+      }
+      throw error;
+    }
+
     // The admission fee is always computed server-side from the branch's actual room
     // pricing — never trust a client-supplied amount, since that would let an applicant
     // pay whatever they want by editing the request.
@@ -70,20 +108,27 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
       : await prisma.room.findFirst({ where: { branchId: selectedBranchId }, orderBy: { admissionFee: 'asc' } });
     const amount = matchingRoom?.admissionFee ?? fallbackRoom?.admissionFee ?? 1500;
 
+    if (booking) {
+      const claim = await prisma.booking.updateMany({ where: { id: booking.id, status: 'RESERVED' }, data: { status: 'FORM_SUBMITTED' } });
+      if (claim.count !== 1) {
+        if (submissionGuardId) await prisma.admissionSubmissionGuard.delete({ where: { id: submissionGuardId } });
+        submissionGuardId = null;
+        return res.status(409).json({ error: 'This booking form has already been submitted.' });
+      }
+      claimedBookingId = booking.id;
+    }
+
     // 1. Upload files to S3 / Local storage
     // Use the host the applicant's browser actually used to reach this server, so the
     // stored URL resolves later for the owner too (not just whoever is on localhost).
     currentStep = 'uploading documents';
     const requestBaseUrl = `${req.protocol}://${req.get('host')}`;
     const profileUpload = await uploadFile(profilePhoto, 'profile.jpg', 'profile_photos', requestBaseUrl);
+    uploadedFiles.push(profileUpload);
     const aadhaarFrontUpload = await uploadFile(aadhaarFront, 'aadhaar_front.jpg', 'aadhaar_documents', requestBaseUrl);
+    uploadedFiles.push(aadhaarFrontUpload);
     const aadhaarBackUpload = await uploadFile(aadhaarBack, 'aadhaar_back.jpg', 'aadhaar_documents', requestBaseUrl);
-
-    if (booking) {
-      const claim = await prisma.booking.updateMany({ where: { id: booking.id, status: 'RESERVED' }, data: { status: 'FORM_SUBMITTED' } });
-      if (claim.count !== 1) return res.status(409).json({ error: 'This booking form has already been submitted.' });
-      claimedBookingId = booking.id;
-    }
+    uploadedFiles.push(aadhaarBackUpload);
 
     // 2. Create AdmissionApplication record
     currentStep = 'saving application';
@@ -160,8 +205,10 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
       amount,
       note: `HostelHub ADMISSION ${payment.id}`,
     });
-    bookingApplicationCreated = true;
-
+    createdApplicationId = application.id;
+    if (submissionGuardId) {
+      await prisma.admissionSubmissionGuard.update({ where: { id: submissionGuardId }, data: { applicationId: application.id } });
+    }
     if (booking) {
       await prisma.booking.update({ where: { id: booking.id }, data: { admissionApplicationId: application.id } });
     }
@@ -172,6 +219,17 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
         paymentLinkUrl: upiPaymentUrl || manualPaymentUrl,
       },
     });
+
+    await createOwnerNotification({
+      title: 'New Admission Form',
+      message: `${selectedName} submitted an admission form for ${branch.name}.`,
+      type: 'NEW_ADMISSION',
+      userId: branch.userId,
+      branchId: selectedBranchId,
+      applicationId: application.id,
+      paymentId: payment.id,
+    });
+    bookingApplicationCreated = true;
 
     res.status(201).json({
       applicationId: application.id,
@@ -184,8 +242,17 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
         : 'Application recorded. Please pay by UPI and share the screenshot on WhatsApp.',
     });
   } catch (error) {
+    if (!bookingApplicationCreated && createdApplicationId) {
+      await prisma.admissionApplication.deleteMany({ where: { id: createdApplicationId } }).catch(() => undefined);
+    }
+    if (!bookingApplicationCreated && submissionGuardId) {
+      await prisma.admissionSubmissionGuard.deleteMany({ where: { id: submissionGuardId } }).catch(() => undefined);
+    }
     if (claimedBookingId && !bookingApplicationCreated) {
       await prisma.booking.updateMany({ where: { id: claimedBookingId, status: 'FORM_SUBMITTED' }, data: { status: 'RESERVED' } }).catch(() => undefined);
+    }
+    if (!bookingApplicationCreated) {
+      await Promise.allSettled(uploadedFiles.map((file) => deleteUploadedFile(file.key, file.bucket)));
     }
     console.error('Submit admission application error:', error);
     res.status(500).json({
@@ -256,6 +323,154 @@ export async function getAdmissionApplicationById(req: AuthenticatedRequest, res
   }
 }
 
+export async function changeAdmissionFeeStatus(req: AuthenticatedRequest, res: Response) {
+  const { id } = req.params;
+  const { paymentStatus, paymentMethod = 'CASH' } = req.body;
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!['PAID', 'PENDING'].includes(paymentStatus)) {
+    return res.status(400).json({ error: 'Payment status must be PAID or PENDING.' });
+  }
+
+  try {
+    const application = await prisma.admissionApplication.findUnique({
+      where: { id },
+      include: { branch: true, payments: true },
+    });
+    if (!application || application.branch.userId !== userId) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    let payment = application.payments.find((item) => item.paymentType === 'ADMISSION');
+    if (!payment) {
+      const room = await prisma.room.findFirst({
+        where: { branchId: application.branchId, roomType: application.preferredRoomType },
+        orderBy: { admissionFee: 'asc' },
+      }) || await prisma.room.findFirst({
+        where: { branchId: application.branchId },
+        orderBy: { admissionFee: 'asc' },
+      });
+      payment = await prisma.payment.create({
+        data: {
+          amount: room?.admissionFee ?? 1500,
+          status: 'PENDING',
+          paymentType: 'ADMISSION',
+          dueDate: application.createdAt,
+          admissionApplicationId: application.id,
+          branchId: application.branchId,
+        },
+      });
+    }
+
+    if (paymentStatus === 'PAID') {
+      const method = ['CASH', 'UPI', 'BANK'].includes(paymentMethod) ? paymentMethod : 'CASH';
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'PAID',
+          paidDate: new Date(),
+          paymentMethod: method,
+          transactionId: `MANUAL-${Date.now()}`,
+        },
+      });
+      await prisma.admissionApplication.update({
+        where: { id },
+        data: { paymentStatus: 'PAID', paymentId: payment.id },
+      });
+      await createOwnerNotification({
+        title: 'Joining Fee Marked Paid',
+        message: `Joining fee of ₹${payment.amount} was marked as received from ${application.name}.`,
+        type: 'ADMISSION_PAYMENT_RECEIVED',
+        userId,
+        branchId: application.branchId,
+        applicationId: id,
+        paymentId: payment.id,
+      });
+    } else {
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'PENDING',
+          paidDate: null,
+          paymentMethod: null,
+          transactionId: null,
+          receiptUrl: null,
+        },
+      });
+      await prisma.admissionApplication.update({
+        where: { id },
+        data: { paymentStatus: 'PENDING', paymentId: null },
+      });
+    }
+
+    res.json({ message: paymentStatus === 'PAID' ? 'Joining fee marked as paid.' : 'Joining fee marked as not paid.' });
+  } catch (error) {
+    console.error('Change joining fee status error:', error);
+    res.status(500).json({ error: 'Failed to change the joining fee status' });
+  }
+}
+
+export async function deleteAdmissionApplication(req: AuthenticatedRequest, res: Response) {
+  const { id } = req.params;
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const application = await prisma.admissionApplication.findUnique({
+      where: { id },
+      include: { branch: true, booking: true, documents: true },
+    });
+    if (!application || application.branch.userId !== userId) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    if (application.status === 'APPROVED') {
+      return res.status(400).json({ error: 'An approved application cannot be deleted here. Use the resident record instead.' });
+    }
+
+    const bookedRoomId = application.booking?.roomId;
+    await prisma.notification.deleteMany({ where: { userId, applicationId: id } });
+    if (application.booking) {
+      await prisma.booking.update({
+        where: { id: application.booking.id },
+        data: { status: 'RESERVED', admissionApplicationId: null },
+      });
+    }
+    await prisma.admissionApplication.delete({ where: { id } });
+    const remainingApplication = await prisma.admissionApplication.findFirst({
+      where: { branchId: application.branchId, phone: application.phone },
+      select: { id: true },
+    });
+    if (remainingApplication) {
+      await prisma.admissionSubmissionGuard.upsert({
+        where: { branchId_phone: { branchId: application.branchId, phone: application.phone } },
+        update: { applicationId: remainingApplication.id },
+        create: {
+          branchId: application.branchId,
+          phone: application.phone,
+          applicationId: remainingApplication.id,
+        },
+      });
+    } else {
+      await prisma.admissionSubmissionGuard.deleteMany({ where: { branchId: application.branchId, phone: application.phone } });
+    }
+    if (bookedRoomId) await updateRoomOccupancyStatus(bookedRoomId);
+    const cleanupResults = await Promise.allSettled(
+      application.documents.map((document) => deleteUploadedFile(document.s3Key, document.s3Bucket)),
+    );
+    for (const result of cleanupResults) {
+      if (result.status === 'rejected') console.error('Admission document cleanup error:', result.reason);
+    }
+
+    res.json({
+      message: application.booking
+        ? 'Admission application deleted. The reserved place and its secure form link are ready for a corrected submission.'
+        : 'Admission application deleted. This phone number can submit a fresh form.',
+    });
+  } catch (error) {
+    console.error('Delete admission application error:', error);
+    res.status(500).json({ error: 'Failed to delete the admission application' });
+  }
+}
+
 // Owner endpoint: Approve / Reject
 export async function reviewApplication(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
@@ -276,6 +491,7 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
         branch: true,
         documents: true,
         booking: true,
+        payments: true,
       },
     });
 
@@ -285,6 +501,12 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
 
     if (application.status !== 'PENDING') {
       return res.status(400).json({ error: 'This application has already been processed.' });
+    }
+
+    const joiningFeePaid = application.paymentStatus === 'PAID'
+      && application.payments.some((payment) => payment.paymentType === 'ADMISSION' && payment.status === 'PAID');
+    if (status === 'APPROVED' && !joiningFeePaid) {
+      return res.status(400).json({ error: 'The joining fee must be collected before this admission can be approved.' });
     }
 
     const claim = await prisma.admissionApplication.updateMany({
@@ -299,6 +521,8 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
     if (status === 'APPROVED') {
       const selectedRoomId = application.booking?.roomId || roomId;
       if (!selectedRoomId) {
+        await prisma.admissionApplication.updateMany({ where: { id, status: 'PROCESSING' }, data: { status: 'PENDING' } });
+        reviewClaimed = false;
         return res.status(400).json({ error: 'Room selection is required for approval.' });
       }
 
@@ -309,11 +533,15 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
       });
 
       if (!room || room.branchId !== application.branchId) {
+        await prisma.admissionApplication.updateMany({ where: { id, status: 'PROCESSING' }, data: { status: 'PENDING' } });
+        reviewClaimed = false;
         return res.status(404).json({ error: 'Selected room not found in the preferred branch.' });
       }
 
       const otherReservations = room.bookings.filter((item) => item.status !== 'OCCUPIED' && item.id !== application.booking?.id).length;
       if (room.tenants.length + otherReservations >= room.capacity) {
+        await prisma.admissionApplication.updateMany({ where: { id, status: 'PROCESSING' }, data: { status: 'PENDING' } });
+        reviewClaimed = false;
         return res.status(400).json({ error: 'Selected room is fully occupied.' });
       }
 
@@ -372,7 +600,7 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
           tenantId: tenant.id,
           branchId: room.branchId,
           monthlyRent: room.monthlyRent,
-          rentDueDay: application.branch.rentDueDay || 5,
+          joiningDate: tenant.joiningDate,
         });
         rentInvoiceCreated = rentInvoice.created;
       } catch (rentError) {
@@ -380,13 +608,14 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
       }
 
       // 6. Notify Owner
-      await prisma.notification.create({
-        data: {
-          title: 'Admission Approved',
-          message: `Application for ${application.name} was approved. Tenant has been allocated to Room ${room.roomNumber}.`,
-          type: 'ADMISSION_APPROVED',
-          userId,
-        },
+      await createOwnerNotification({
+        title: 'Admission Approved',
+        message: `${application.name} was admitted to Room ${room.roomNumber}.`,
+        type: 'ADMISSION_APPROVED',
+        userId,
+        branchId: application.branchId,
+        tenantId: tenant.id,
+        applicationId: id,
       });
 
       const rentMonth = getCalendarMonthRange().label;
@@ -408,13 +637,13 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
         await updateRoomOccupancyStatus(application.booking.roomId);
       }
 
-      await prisma.notification.create({
-        data: {
-          title: 'Admission Rejected',
-          message: `Application for ${application.name} was rejected.`,
-          type: 'ADMISSION_APPROVED', // Shared status notifications
-          userId,
-        },
+      await createOwnerNotification({
+        title: 'Admission Not Accepted',
+        message: `${application.name}'s admission request was not accepted.`,
+        type: 'ADMISSION_APPROVED',
+        userId,
+        branchId: application.branchId,
+        applicationId: id,
       });
 
       return res.json({ message: 'Application rejected.' });
