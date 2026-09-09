@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider } from 'react-native-paper';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './src/services/AuthContext';
+import apiClient from './src/services/api';
 import AppNavigator from './src/navigation';
 import { theme } from './src/theme';
 import AppSplashScreen from './src/components/AppSplashScreen';
@@ -26,6 +27,11 @@ const queryClient = new QueryClient({
   },
 });
 
+async function prepareInitialDashboard(signal: AbortSignal) {
+  const response = await apiClient.get('/dashboard', { signal });
+  queryClient.setQueryData(['dashboardMetrics'], response.data);
+}
+
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const finishSplash = useCallback(() => setShowSplash(false), []);
@@ -38,7 +44,7 @@ export default function App() {
   if (showSplash) {
     return (
       <SafeAreaProvider>
-        <AppSplashScreen onFinish={finishSplash} />
+        <AppSplashScreen onFinish={finishSplash} prepareApp={prepareInitialDashboard} />
         <StatusBar style="dark" />
       </SafeAreaProvider>
     );

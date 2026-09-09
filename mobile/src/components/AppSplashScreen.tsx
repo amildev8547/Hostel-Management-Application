@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -12,7 +12,11 @@ import {
 
 type AppSplashScreenProps = {
   onFinish: () => void;
+  prepareApp: (signal: AbortSignal) => Promise<void>;
 };
+
+const MINIMUM_SPLASH_DURATION = 3000;
+const MAXIMUM_SPLASH_DURATION = 20000;
 
 function HostelHubMark({ size }: { size: number }) {
   return (
@@ -27,47 +31,101 @@ function HostelHubMark({ size }: { size: number }) {
   );
 }
 
-export default function AppSplashScreen({ onFinish }: AppSplashScreenProps) {
+export default function AppSplashScreen({ onFinish, prepareApp }: AppSplashScreenProps) {
   const { width, height } = useWindowDimensions();
   const entrance = useRef(new Animated.Value(0)).current;
-  const progress = useRef(new Animated.Value(0)).current;
+  const loadingMotion = useRef(new Animated.Value(-1)).current;
   const exitOpacity = useRef(new Animated.Value(1)).current;
+  const isFinishing = useRef(false);
+  const [loadingMessage, setLoadingMessage] = useState('Connecting to HostelHub');
+
+  const finishSplash = useCallback(() => {
+    if (isFinishing.current) return;
+    isFinishing.current = true;
+
+    Animated.timing(exitOpacity, {
+      toValue: 0,
+      duration: 300,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) onFinish();
+    });
+  }, [exitOpacity, onFinish]);
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(entrance, {
+    const entranceAnimation = Animated.timing(entrance, {
+      toValue: 1,
+      duration: 520,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    const loadingAnimation = Animated.loop(
+      Animated.timing(loadingMotion, {
         toValue: 1,
-        duration: 520,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(progress, {
-        toValue: 1,
-        duration: 2450,
+        duration: 1250,
         easing: Easing.inOut(Easing.cubic),
         useNativeDriver: true,
       }),
-    ]).start();
+    );
 
-    const finishTimer = setTimeout(() => {
-      Animated.timing(exitOpacity, {
-        toValue: 0,
-        duration: 300,
-        easing: Easing.inOut(Easing.quad),
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) onFinish();
+    entranceAnimation.start();
+    loadingAnimation.start();
+
+    return () => {
+      entranceAnimation.stop();
+      loadingAnimation.stop();
+    };
+  }, [entrance, loadingMotion]);
+
+  useEffect(() => {
+    const requestController = new AbortController();
+    let minimumTimeElapsed = false;
+    let appIsReady = false;
+
+    const finishWhenReady = () => {
+      if (minimumTimeElapsed && appIsReady) finishSplash();
+    };
+
+    const minimumTimer = setTimeout(() => {
+      minimumTimeElapsed = true;
+      finishWhenReady();
+    }, MINIMUM_SPLASH_DURATION);
+
+    const recordsMessageTimer = setTimeout(() => {
+      if (!isFinishing.current) setLoadingMessage('Opening your hostel records');
+    }, 4500);
+
+    const reassuranceTimer = setTimeout(() => {
+      if (!isFinishing.current) setLoadingMessage('Almost ready — thank you for waiting');
+    }, 10500);
+
+    const maximumTimer = setTimeout(() => {
+      requestController.abort();
+      finishSplash();
+    }, MAXIMUM_SPLASH_DURATION);
+
+    prepareApp(requestController.signal)
+      .catch(() => undefined)
+      .finally(() => {
+        appIsReady = true;
+        finishWhenReady();
       });
-    }, 2500);
 
-    return () => clearTimeout(finishTimer);
-  }, [entrance, exitOpacity, onFinish, progress]);
+    return () => {
+      requestController.abort();
+      clearTimeout(minimumTimer);
+      clearTimeout(recordsMessageTimer);
+      clearTimeout(reassuranceTimer);
+      clearTimeout(maximumTimer);
+    };
+  }, [finishSplash, prepareApp]);
 
   const compact = height < 620 || width < 340;
   const markSize = compact ? 78 : Math.min(96, width * 0.24);
 
   return (
-    <Animated.View style={[styles.screen, { opacity: exitOpacity }]} accessibilityLabel="HostelHub is starting">
+    <Animated.View style={[styles.screen, { opacity: exitOpacity }]} accessibilityLabel={loadingMessage}>
       <View style={[styles.glow, styles.glowTop, { width: width * 0.78, height: width * 0.78 }]} />
       <View style={[styles.glow, styles.glowBottom, { width: width * 0.58, height: width * 0.58 }]} />
 
@@ -101,13 +159,20 @@ export default function AppSplashScreen({ onFinish }: AppSplashScreenProps) {
       </Animated.View>
 
       <View style={[styles.loadingArea, { bottom: compact ? 28 : Math.max(42, height * 0.065) }]}>
-        <Text style={styles.loadingText}>Getting everything ready</Text>
+        <Text style={styles.loadingText}>{loadingMessage}</Text>
         <View style={styles.progressTrack}>
           <Animated.View
             style={[
               styles.progressBar,
               {
-                transform: [{ scaleX: progress }],
+                transform: [
+                  {
+                    translateX: loadingMotion.interpolate({
+                      inputRange: [-1, 1],
+                      outputRange: [-110, 110],
+                    }),
+                  },
+                ],
               },
             ]}
           />
@@ -224,7 +289,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#DDD6FE',
   },
   progressBar: {
-    width: 160,
+    width: 62,
     height: 4,
     borderRadius: 2,
     backgroundColor: '#4F46E5',
