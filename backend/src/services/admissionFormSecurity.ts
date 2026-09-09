@@ -17,6 +17,7 @@ export async function issueAdmissionFormToken(branchId: string, bookingToken?: s
       branchId,
       bookingToken: bookingToken || null,
       expiresAt: new Date(now.getTime() + FORM_TOKEN_LIFETIME_MS),
+      usedAt: null,
     },
   });
   return token;
@@ -28,9 +29,23 @@ export async function claimAdmissionFormToken(input: { token: string; branchId: 
     where: {
       tokenHash: hashToken(input.token),
       branchId: input.branchId,
-      bookingToken: input.bookingToken || null,
-      usedAt: null,
       expiresAt: { gt: new Date() },
+      AND: [
+        {
+          OR: [
+            { usedAt: null },
+            { usedAt: { isSet: false } },
+          ],
+        },
+        input.bookingToken
+          ? { bookingToken: input.bookingToken }
+          : {
+              OR: [
+                { bookingToken: null },
+                { bookingToken: { isSet: false } },
+              ],
+            },
+      ],
     },
     data: { usedAt: new Date() },
   });
