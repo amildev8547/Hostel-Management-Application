@@ -36,7 +36,7 @@ const queryClient = new QueryClient({
 async function prepareInitialDashboard(signal: AbortSignal) {
   const now = new Date();
   const initialRequests = await Promise.allSettled([
-    apiClient.get('/dashboard', { params: { month: now.getMonth() + 1, year: now.getFullYear() }, signal }),
+    apiClient.get('/dashboard', { signal }),
     apiClient.get('/branches', { signal }),
     apiClient.get('/admissions', { params: { status: 'PENDING' }, signal }),
     apiClient.get('/tenants', { params: { status: 'ACTIVE' }, signal }),
@@ -44,7 +44,7 @@ async function prepareInitialDashboard(signal: AbortSignal) {
   ]);
 
   const cacheKeys = [
-    ['dashboardMetrics', now.getMonth(), now.getFullYear()],
+    ['dashboardMetrics'],
     ['branchesList', ''],
     ['admissionsList', '', 'PENDING'],
     ['tenantsList', '', 'ACTIVE'],

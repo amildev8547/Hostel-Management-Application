@@ -24,7 +24,7 @@
 - **Occupancy percentage** across all branches
 - **Monthly rent collection** — total collected, pending, and overdue amounts
 - **Pending admissions** count
-- **Month-wise resident movement** — shows how many residents joined and moved out, with clear previous/next month controls
+- **Resident movement history** — a bottom-of-home bar chart shows joined and moved-out counts for recent months, with sideways scrolling for older months
 - **Recent activities** — latest admission applications, recent payments, and new room allocations
 
 ---

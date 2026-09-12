@@ -3,6 +3,25 @@ import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
 import { ensureCurrentMonthRentInvoicesForOwner, getCalendarMonthRange, markOverdueRentInvoices, syncCurrentMonthRentDueDates } from '../utils/rentBilling';
 
+type ResidentMovementMonth = { month: number; year: number; joined: number; left: number };
+
+export function buildResidentMovementHistory(now: Date, joinedDates: Date[], leavingDates: Date[]): ResidentMovementMonth[] {
+  const history = Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - index, 1);
+    return { month: date.getMonth() + 1, year: date.getFullYear(), joined: 0, left: 0 };
+  });
+  const byMonth = new Map(history.map((item) => [`${item.year}-${item.month}`, item]));
+  joinedDates.forEach((date) => {
+    const item = byMonth.get(`${date.getFullYear()}-${date.getMonth() + 1}`);
+    if (item) item.joined += 1;
+  });
+  leavingDates.forEach((date) => {
+    const item = byMonth.get(`${date.getFullYear()}-${date.getMonth() + 1}`);
+    if (item) item.left += 1;
+  });
+  return history;
+}
+
 export async function getHomeDashboard(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
   const now = new Date();
@@ -109,6 +128,33 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
       }),
     ]);
 
+    // Build a single, compact history payload for the scrollable home chart.
+    // The latest month is first so the most useful information is immediately visible.
+    const historyStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const historyEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const [joinedHistory, leftHistory] = await Promise.all([
+      prisma.tenant.findMany({
+        where: {
+          joiningDate: { gte: historyStart, lt: historyEnd },
+          room: { branch: { userId } },
+        },
+        select: { joiningDate: true },
+      }),
+      prisma.tenant.findMany({
+        where: {
+          status: 'VACATED',
+          leavingDate: { gte: historyStart, lt: historyEnd },
+          room: { branch: { userId } },
+        },
+        select: { leavingDate: true },
+      }),
+    ]);
+    const movementHistory = buildResidentMovementHistory(
+      now,
+      joinedHistory.map(({ joiningDate }) => joiningDate),
+      leftHistory.flatMap(({ leavingDate }) => leavingDate ? [leavingDate] : []),
+    );
+
     // 4. Recent activities
     // - New Admissions (recent 5 applications)
     const recentAdmissions = await prisma.admissionApplication.findMany({
@@ -170,6 +216,7 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
         joined: residentsJoined,
         left: residentsLeft,
       },
+      residentMovementHistory: movementHistory,
     });
   } catch (error) {
     console.error('Home dashboard metrics error:', error);

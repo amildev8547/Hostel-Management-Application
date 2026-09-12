@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, Surface, useTheme } from 'react-native-paper';
 import { useQuery } from '@tanstack/react-query';
@@ -27,27 +27,24 @@ function SummaryCard({ icon, value, label, help, color, onPress }: SummaryCardPr
 
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const theme = useTheme();
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
-  const [activityMonth, setActivityMonth] = useState(currentMonth);
-  const [activityYear, setActivityYear] = useState(currentYear);
   const { data: dashboardData, isLoading, refetch } = useQuery({
-    queryKey: ['dashboardMetrics', activityMonth, activityYear],
-    queryFn: async () => (await apiClient.get('/dashboard', { params: { month: activityMonth + 1, year: activityYear } })).data,
+    queryKey: ['dashboardMetrics'],
+    queryFn: async () => (await apiClient.get('/dashboard')).data,
     placeholderData: (previousData) => previousData,
   });
   const metrics = dashboardData?.metrics || { totalBranches: 0, totalRooms: 0, totalCapacity: 0, occupiedBeds: 0, reservedBeds: 0, vacantBeds: 0, monthlyCollection: 0, pendingCollection: 0, overdueCollection: 0, pendingAdmissions: 0 };
-  const residentMovement = dashboardData?.residentMovement || { joined: 0, left: 0 };
+  const legacyMovement = dashboardData?.residentMovement || { joined: 0, left: 0 };
+  const residentMovementHistory = dashboardData?.residentMovementHistory?.length
+    ? dashboardData.residentMovementHistory
+    : Array.from({ length: 12 }, (_, index) => {
+        const date = new Date(new Date().getFullYear(), new Date().getMonth() - index, 1);
+        return { month: date.getMonth() + 1, year: date.getFullYear(), joined: index === 0 ? legacyMovement.joined : 0, left: index === 0 ? legacyMovement.left : 0 };
+      });
+  const highestMovement = residentMovementHistory.reduce(
+    (highest: number, item: any) => Math.max(highest, Number(item.joined) || 0, Number(item.left) || 0),
+    1,
+  );
   const openTab = (screen: 'Branches' | 'Admissions') => navigation.navigate('Main', { screen } as any);
-  const isCurrentActivityMonth = activityMonth === currentMonth && activityYear === currentYear;
-
-  const changeActivityMonth = (direction: -1 | 1) => {
-    const next = new Date(activityYear, activityMonth + direction, 1);
-    if (next.getFullYear() > currentYear || (next.getFullYear() === currentYear && next.getMonth() > currentMonth)) return;
-    setActivityMonth(next.getMonth());
-    setActivityYear(next.getFullYear());
-  };
 
   if (isLoading) return <View style={styles.center}><Text style={styles.loadingText}>Loading home page…</Text></View>;
 
@@ -63,38 +60,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         </View>
         <View style={styles.occupancyBottom}><Text style={styles.vacantText}>{metrics.vacantBeds} available · {metrics.reservedBeds || 0} reserved</Text><Text style={styles.viewText}>View branches  ›</Text></View>
       </TouchableOpacity>
-
-      <Surface style={styles.movementCard} elevation={1}>
-        <View style={styles.movementHeader}>
-          <View style={styles.movementHeaderIcon}><Icon name="account-switch-outline" size={25} color="#4F46E5" /></View>
-          <View style={styles.movementHeaderCopy}>
-            <Text style={styles.movementTitle}>{isCurrentActivityMonth ? 'Residents this month' : 'Residents in selected month'}</Text>
-            <Text style={styles.movementMonth}>{new Date(activityYear, activityMonth, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</Text>
-          </View>
-        </View>
-        <View style={styles.movementStats}>
-          <View style={[styles.movementStat, { backgroundColor: '#ECFDF5' }]}>
-            <Icon name="account-plus-outline" size={25} color="#059669" />
-            <Text style={styles.movementValue}>{residentMovement.joined}</Text>
-            <Text style={styles.movementLabel}>New residents joined</Text>
-          </View>
-          <View style={[styles.movementStat, { backgroundColor: '#FFF7ED' }]}>
-            <Icon name="account-arrow-right-outline" size={25} color="#EA580C" />
-            <Text style={styles.movementValue}>{residentMovement.left}</Text>
-            <Text style={styles.movementLabel}>Residents moved out</Text>
-          </View>
-        </View>
-        <View style={styles.movementNavigation}>
-          <TouchableOpacity style={styles.monthAction} onPress={() => changeActivityMonth(-1)} accessibilityRole="button">
-            <Icon name="chevron-left" size={21} color="#4F46E5" />
-            <Text style={styles.monthActionText}>Previous month</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.monthAction, isCurrentActivityMonth && styles.monthActionDisabled]} onPress={() => changeActivityMonth(1)} disabled={isCurrentActivityMonth} accessibilityRole="button">
-            <Text style={[styles.monthActionText, isCurrentActivityMonth && styles.monthActionTextDisabled]}>Next month</Text>
-            <Icon name="chevron-right" size={21} color={isCurrentActivityMonth ? '#CBD5E1' : '#4F46E5'} />
-          </TouchableOpacity>
-        </View>
-      </Surface>
 
       <View style={styles.summaryGrid}>
         <SummaryCard icon="office-building-outline" value={metrics.totalBranches} label="Hostel branches" help="View all locations" color="#4F46E5" onPress={() => openTab('Branches')} />
@@ -115,6 +80,39 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         <View style={styles.divider} />
         <ActionRow icon="cash-multiple" color="#059669" background="#D1FAE5" title="Manage rent payments" help="See paid, due, and late rent" onPress={() => navigation.navigate('PaymentsDashboard', {})} />
       </Surface>
+
+      <Surface style={styles.movementCard} elevation={1}>
+        <View style={styles.movementHeader}>
+          <View style={styles.movementHeaderIcon}><Icon name="chart-bar" size={25} color="#4F46E5" /></View>
+          <View style={styles.movementHeaderCopy}>
+            <Text style={styles.movementTitle}>Resident movement</Text>
+            <Text style={styles.movementHint}>Latest months first. Swipe sideways to see older months.</Text>
+          </View>
+        </View>
+        <View style={styles.chartLegend}>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#10B981' }]} /><Text style={styles.legendText}>Joined</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#F97316' }]} /><Text style={styles.legendText}>Moved out</Text></View>
+        </View>
+        <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chartContent} style={styles.chartScroll}>
+          {residentMovementHistory.map((item: any) => {
+            const joined = Number(item.joined) || 0;
+            const left = Number(item.left) || 0;
+            const joinedHeight = joined === 0 ? 5 : Math.max(14, Math.round((joined / highestMovement) * 82));
+            const leftHeight = left === 0 ? 5 : Math.max(14, Math.round((left / highestMovement) * 82));
+            const monthName = new Date(item.year, item.month - 1, 1).toLocaleDateString('en-IN', { month: 'short' });
+            return (
+              <View key={`${item.year}-${item.month}`} style={styles.chartMonth} accessibilityLabel={`${monthName} ${item.year}: ${joined} joined and ${left} moved out`}>
+                <View style={styles.barArea}>
+                  <View style={styles.barColumn}><Text style={styles.barValue}>{joined}</Text><View style={[styles.bar, { height: joinedHeight, backgroundColor: '#10B981' }]} /></View>
+                  <View style={styles.barColumn}><Text style={styles.barValue}>{left}</Text><View style={[styles.bar, { height: leftHeight, backgroundColor: '#F97316' }]} /></View>
+                </View>
+                <Text style={styles.chartMonthName}>{monthName}</Text>
+                <Text style={styles.chartYear}>{item.year}</Text>
+              </View>
+            );
+          })}
+        </ScrollView>
+      </Surface>
     </ScrollView>
   );
 }
@@ -128,20 +126,24 @@ const styles = StyleSheet.create({
   welcome: { fontWeight: '800', color: '#0F172A' }, intro: { color: '#64748B', fontSize: 15, marginTop: 4, marginBottom: 18 },
   occupancyCard: { backgroundColor: '#172554', borderRadius: 20, padding: 20, marginBottom: 16 }, occupancyTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, occupancyLabel: { color: '#DBEAFE', fontSize: 15, fontWeight: '600' }, occupancyValue: { color: '#FFFFFF', fontSize: 27, lineHeight: 34, fontWeight: '900', marginTop: 2 }, bedIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: '#FFFFFF20', justifyContent: 'center', alignItems: 'center' }, occupancyBottom: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }, vacantText: { color: '#E0F2FE', fontWeight: '600' }, viewText: { color: '#7DD3FC', fontWeight: '800' },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, summaryCard: { width: '48%', minHeight: 184, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }, summaryIcon: { width: 46, height: 46, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 10 }, summaryValue: { color: '#0F172A', fontSize: 24, lineHeight: 30, fontWeight: '900' }, summaryLabel: { color: '#1E293B', fontSize: 15, fontWeight: '800', marginTop: 2 }, summaryHelp: { color: '#64748B', fontSize: 12, lineHeight: 17, marginTop: 4, flex: 1 }, openRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 }, openText: { fontSize: 14, fontWeight: '800' },
-  movementCard: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 15, marginBottom: 16 },
+  movementCard: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 15, marginTop: 26 },
   movementHeader: { flexDirection: 'row', alignItems: 'center' },
   movementHeaderIcon: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' },
   movementHeaderCopy: { flex: 1, marginLeft: 12 },
   movementTitle: { color: '#0F172A', fontSize: 17, fontWeight: '800' },
-  movementMonth: { color: '#64748B', fontSize: 14, marginTop: 2 },
-  movementStats: { flexDirection: 'row', gap: 10, marginTop: 15 },
-  movementStat: { flex: 1, minHeight: 104, borderRadius: 14, padding: 13, justifyContent: 'center' },
-  movementValue: { color: '#0F172A', fontSize: 26, fontWeight: '900', marginTop: 6 },
-  movementLabel: { color: '#475569', fontSize: 12, lineHeight: 17, fontWeight: '700', marginTop: 2 },
-  movementNavigation: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 13, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 11 },
-  monthAction: { minHeight: 42, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 },
-  monthActionDisabled: { opacity: 0.65 },
-  monthActionText: { color: '#4F46E5', fontSize: 13, fontWeight: '800' },
-  monthActionTextDisabled: { color: '#94A3B8' },
+  movementHint: { color: '#64748B', fontSize: 13, lineHeight: 18, marginTop: 2 },
+  chartLegend: { flexDirection: 'row', gap: 18, marginTop: 15 },
+  legendItem: { flexDirection: 'row', alignItems: 'center' },
+  legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
+  legendText: { color: '#475569', fontSize: 13, fontWeight: '700' },
+  chartScroll: { marginTop: 13 },
+  chartContent: { gap: 8, paddingRight: 8 },
+  chartMonth: { width: 90, alignItems: 'center', borderRadius: 12, backgroundColor: '#F8FAFC', paddingTop: 8, paddingBottom: 9 },
+  barArea: { height: 110, flexDirection: 'row', alignItems: 'flex-end', gap: 7 },
+  barColumn: { width: 27, height: 104, justifyContent: 'flex-end', alignItems: 'center' },
+  barValue: { color: '#334155', fontSize: 12, fontWeight: '800', marginBottom: 4 },
+  bar: { width: 24, borderRadius: 7 },
+  chartMonthName: { color: '#1E293B', fontSize: 13, fontWeight: '800', marginTop: 7 },
+  chartYear: { color: '#94A3B8', fontSize: 11, marginTop: 1 },
   sectionTitle: { fontWeight: '800', color: '#0F172A', marginTop: 26, marginBottom: 12 }, actionsCard: { backgroundColor: '#FFFFFF', borderRadius: 18, overflow: 'hidden' }, actionRow: { minHeight: 78, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12 }, actionIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' }, actionCopy: { flex: 1, marginHorizontal: 13 }, actionTitle: { color: '#1E293B', fontSize: 16, fontWeight: '800' }, actionHelp: { color: '#64748B', fontSize: 13, marginTop: 3 }, divider: { height: 1, backgroundColor: '#E2E8F0', marginLeft: 75 },
 });
