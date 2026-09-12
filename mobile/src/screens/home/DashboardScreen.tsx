@@ -64,18 +64,11 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         <View style={styles.occupancyBottom}><Text style={styles.vacantText}>{metrics.vacantBeds} available · {metrics.reservedBeds || 0} reserved</Text><Text style={styles.viewText}>View branches  ›</Text></View>
       </TouchableOpacity>
 
-      <View style={styles.summaryGrid}>
-        <SummaryCard icon="office-building-outline" value={metrics.totalBranches} label="Hostel branches" help="View all locations" color="#4F46E5" onPress={() => openTab('Branches')} />
-        <SummaryCard icon="door-open" value={metrics.totalRooms} label="Rooms" help="Find rooms by branch" color="#0284C7" onPress={() => openTab('Branches')} />
-        <SummaryCard icon="account-clock-outline" value={metrics.pendingAdmissions} label="Applications waiting" help="Review new requests" color="#D97706" onPress={() => openTab('Admissions')} />
-        <SummaryCard icon="cash-check" value={`₹${metrics.monthlyCollection}`} label="Rent received" help={`₹${metrics.pendingCollection} still due`} color="#059669" onPress={() => navigation.navigate('PaymentsDashboard', {})} />
-      </View>
-
       <Surface style={styles.movementCard} elevation={1}>
         <View style={styles.movementHeader}>
           <View style={styles.movementHeaderIcon}><Icon name="account-switch-outline" size={25} color="#4F46E5" /></View>
           <View style={styles.movementHeaderCopy}>
-            <Text style={styles.movementTitle}>Resident movement</Text>
+            <Text style={styles.movementTitle}>{isCurrentActivityMonth ? 'Residents this month' : 'Residents in selected month'}</Text>
             <Text style={styles.movementMonth}>{new Date(activityYear, activityMonth, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</Text>
           </View>
         </View>
@@ -103,6 +96,13 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         </View>
       </Surface>
 
+      <View style={styles.summaryGrid}>
+        <SummaryCard icon="office-building-outline" value={metrics.totalBranches} label="Hostel branches" help="View all locations" color="#4F46E5" onPress={() => openTab('Branches')} />
+        <SummaryCard icon="door-open" value={metrics.totalRooms} label="Rooms" help="Find rooms by branch" color="#0284C7" onPress={() => openTab('Branches')} />
+        <SummaryCard icon="account-clock-outline" value={metrics.pendingAdmissions} label="Applications waiting" help="Review new requests" color="#D97706" onPress={() => openTab('Admissions')} />
+        <SummaryCard icon="cash-check" value={`₹${metrics.monthlyCollection}`} label="Rent received" help={`₹${metrics.pendingCollection} still due`} color="#059669" onPress={() => navigation.navigate('PaymentsDashboard', {})} />
+      </View>
+
       <Text variant="titleLarge" style={styles.sectionTitle}>Common tasks</Text>
       <Surface style={styles.actionsCard} elevation={1}>
         <ActionRow icon="office-building-plus-outline" color="#4F46E5" background="#EEF2FF" title="Add a hostel branch" help="Create a new location" onPress={() => navigation.navigate('BranchForm', {})} />
@@ -128,14 +128,14 @@ const styles = StyleSheet.create({
   welcome: { fontWeight: '800', color: '#0F172A' }, intro: { color: '#64748B', fontSize: 15, marginTop: 4, marginBottom: 18 },
   occupancyCard: { backgroundColor: '#172554', borderRadius: 20, padding: 20, marginBottom: 16 }, occupancyTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, occupancyLabel: { color: '#DBEAFE', fontSize: 15, fontWeight: '600' }, occupancyValue: { color: '#FFFFFF', fontSize: 27, lineHeight: 34, fontWeight: '900', marginTop: 2 }, bedIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: '#FFFFFF20', justifyContent: 'center', alignItems: 'center' }, occupancyBottom: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }, vacantText: { color: '#E0F2FE', fontWeight: '600' }, viewText: { color: '#7DD3FC', fontWeight: '800' },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, summaryCard: { width: '48%', minHeight: 184, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }, summaryIcon: { width: 46, height: 46, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 10 }, summaryValue: { color: '#0F172A', fontSize: 24, lineHeight: 30, fontWeight: '900' }, summaryLabel: { color: '#1E293B', fontSize: 15, fontWeight: '800', marginTop: 2 }, summaryHelp: { color: '#64748B', fontSize: 12, lineHeight: 17, marginTop: 4, flex: 1 }, openRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 }, openText: { fontSize: 14, fontWeight: '800' },
-  movementCard: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, marginTop: 16 },
+  movementCard: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 15, marginBottom: 16 },
   movementHeader: { flexDirection: 'row', alignItems: 'center' },
   movementHeaderIcon: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' },
   movementHeaderCopy: { flex: 1, marginLeft: 12 },
   movementTitle: { color: '#0F172A', fontSize: 17, fontWeight: '800' },
   movementMonth: { color: '#64748B', fontSize: 14, marginTop: 2 },
   movementStats: { flexDirection: 'row', gap: 10, marginTop: 15 },
-  movementStat: { flex: 1, minHeight: 120, borderRadius: 14, padding: 13, justifyContent: 'center' },
+  movementStat: { flex: 1, minHeight: 104, borderRadius: 14, padding: 13, justifyContent: 'center' },
   movementValue: { color: '#0F172A', fontSize: 26, fontWeight: '900', marginTop: 6 },
   movementLabel: { color: '#475569', fontSize: 12, lineHeight: 17, fontWeight: '700', marginTop: 2 },
   movementNavigation: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 13, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 11 },
