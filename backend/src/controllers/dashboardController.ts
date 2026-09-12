@@ -7,7 +7,7 @@ type ResidentMovementMonth = { month: number; year: number; joined: number; left
 
 export function buildResidentMovementHistory(now: Date, joinedDates: Date[], leavingDates: Date[]): ResidentMovementMonth[] {
   const history = Array.from({ length: 12 }, (_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - index, 1);
+    const date = new Date(now.getFullYear(), now.getMonth() - (11 - index), 1);
     return { month: date.getMonth() + 1, year: date.getFullYear(), joined: 0, left: 0 };
   });
   const byMonth = new Map(history.map((item) => [`${item.year}-${item.month}`, item]));
@@ -129,7 +129,8 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
     ]);
 
     // Build a single, compact history payload for the scrollable home chart.
-    // The latest month is first so the most useful information is immediately visible.
+    // Keep the timeline chronological; the mobile chart opens at the right-hand,
+    // latest-month end and lets the user scroll left through older months.
     const historyStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
     const historyEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const [joinedHistory, leftHistory] = await Promise.all([

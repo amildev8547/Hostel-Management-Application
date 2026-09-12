@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, Surface, useTheme } from 'react-native-paper';
 import { useQuery } from '@tanstack/react-query';
@@ -27,6 +27,7 @@ function SummaryCard({ icon, value, label, help, color, onPress }: SummaryCardPr
 
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const theme = useTheme();
+  const movementScrollRef = useRef<ScrollView>(null);
   const { data: dashboardData, isLoading, refetch } = useQuery({
     queryKey: ['dashboardMetrics'],
     queryFn: async () => (await apiClient.get('/dashboard')).data,
@@ -37,8 +38,9 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const residentMovementHistory = dashboardData?.residentMovementHistory?.length
     ? dashboardData.residentMovementHistory
     : Array.from({ length: 12 }, (_, index) => {
-        const date = new Date(new Date().getFullYear(), new Date().getMonth() - index, 1);
-        return { month: date.getMonth() + 1, year: date.getFullYear(), joined: index === 0 ? legacyMovement.joined : 0, left: index === 0 ? legacyMovement.left : 0 };
+        const today = new Date();
+        const date = new Date(today.getFullYear(), today.getMonth() - (11 - index), 1);
+        return { month: date.getMonth() + 1, year: date.getFullYear(), joined: index === 11 ? legacyMovement.joined : 0, left: index === 11 ? legacyMovement.left : 0 };
       });
   const highestMovement = residentMovementHistory.reduce(
     (highest: number, item: any) => Math.max(highest, Number(item.joined) || 0, Number(item.left) || 0),
@@ -86,14 +88,22 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           <View style={styles.movementHeaderIcon}><Icon name="chart-bar" size={25} color="#4F46E5" /></View>
           <View style={styles.movementHeaderCopy}>
             <Text style={styles.movementTitle}>Resident movement</Text>
-            <Text style={styles.movementHint}>Latest months first. Swipe sideways to see older months.</Text>
+            <Text style={styles.movementHint}>Latest month is on the right. Scroll left for older months.</Text>
           </View>
         </View>
         <View style={styles.chartLegend}>
           <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#10B981' }]} /><Text style={styles.legendText}>Joined</Text></View>
           <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#F97316' }]} /><Text style={styles.legendText}>Moved out</Text></View>
         </View>
-        <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chartContent} style={styles.chartScroll}>
+        <ScrollView
+          ref={movementScrollRef}
+          horizontal
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chartContent}
+          style={styles.chartScroll}
+          onContentSizeChange={() => movementScrollRef.current?.scrollToEnd({ animated: false })}
+        >
           {residentMovementHistory.map((item: any) => {
             const joined = Number(item.joined) || 0;
             const left = Number(item.left) || 0;
