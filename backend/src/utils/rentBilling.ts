@@ -1,5 +1,8 @@
 import prisma from '../config/db';
 
+type RentInvoiceResult = Awaited<ReturnType<typeof ensureCurrentMonthRentInvoiceUnlocked>>;
+const rentInvoiceLocks = new Map<string, Promise<RentInvoiceResult>>();
+
 export function getCalendarMonthRange(date = new Date()) {
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -19,13 +22,15 @@ export function getRentDueDate(date: Date, requestedDay: number) {
   return new Date(year, month, safeDay);
 }
 
-export async function ensureCurrentMonthRentInvoice(input: {
+type CurrentMonthRentInput = {
   tenantId: string;
   branchId: string;
   monthlyRent: number;
   joiningDate: Date;
   now?: Date;
-}) {
+};
+
+async function ensureCurrentMonthRentInvoiceUnlocked(input: CurrentMonthRentInput) {
   const now = input.now || new Date();
   const { start, nextStart } = getCalendarMonthRange(now);
   const existing = await prisma.payment.findFirst({
@@ -60,6 +65,62 @@ export async function ensureCurrentMonthRentInvoice(input: {
   });
 
   return { payment, created: true };
+}
+
+export async function ensureCurrentMonthRentInvoice(input: CurrentMonthRentInput) {
+  const now = input.now || new Date();
+  const { start } = getCalendarMonthRange(now);
+  const lockKey = `${input.tenantId}:${start.getFullYear()}-${start.getMonth()}`;
+  const activeLock = rentInvoiceLocks.get(lockKey);
+  if (activeLock) return activeLock;
+
+  const task = ensureCurrentMonthRentInvoiceUnlocked({ ...input, now });
+  rentInvoiceLocks.set(lockKey, task);
+  try {
+    return await task;
+  } finally {
+    if (rentInvoiceLocks.get(lockKey) === task) rentInvoiceLocks.delete(lockKey);
+  }
+}
+
+export async function ensureCurrentMonthRentInvoicesForOwner(input: {
+  userId: string;
+  branchId?: string;
+  now?: Date;
+}) {
+  const now = input.now || new Date();
+  const tenants = await prisma.tenant.findMany({
+    where: {
+      status: 'ACTIVE',
+      room: {
+        branch: { userId: input.userId },
+        ...(input.branchId ? { branchId: input.branchId } : {}),
+      },
+    },
+    include: { room: true },
+  });
+
+  let generatedCount = 0;
+  const skippedTenants: string[] = [];
+  // Process a small batch concurrently so a hostel with many residents does not
+  // make the dashboard wait for two serial database calls per person.
+  const batchSize = 10;
+  for (let index = 0; index < tenants.length; index += batchSize) {
+    const tenantBatch = tenants.slice(index, index + batchSize);
+    const results = await Promise.all(tenantBatch.map((tenant) => ensureCurrentMonthRentInvoice({
+      tenantId: tenant.id,
+      branchId: tenant.room.branchId,
+      monthlyRent: tenant.room.monthlyRent,
+      joiningDate: tenant.joiningDate,
+      now,
+    })));
+    results.forEach((result, resultIndex) => {
+      if (result.created) generatedCount += 1;
+      else skippedTenants.push(tenantBatch[resultIndex].name);
+    });
+  }
+
+  return { generatedCount, skippedTenants };
 }
 
 export async function syncCurrentMonthRentDueDates(input: { userId?: string; branchId?: string; now?: Date }) {

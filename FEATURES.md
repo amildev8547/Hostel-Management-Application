@@ -24,6 +24,7 @@
 - **Occupancy percentage** across all branches
 - **Monthly rent collection** — total collected, pending, and overdue amounts
 - **Pending admissions** count
+- **Month-wise resident movement** — shows how many residents joined and moved out, with clear previous/next month controls
 - **Recent activities** — latest admission applications, recent payments, and new room allocations
 
 ---
@@ -111,7 +112,7 @@
 
 ## 7. 💰 Payment & Billing
 
-- **Automatic monthly rent generation** — generate rent invoices for all active tenants in one tap
+- **Automatic monthly rent generation** — current-month bills are prepared during normal dashboard/payment refresh; no manual bill-creation step is required
 - **Joining-date billing cycle** — every standard monthly bill uses the resident's joining day, safely clamped at month-end
 - **Custom rent invoice** — create prorated invoices for partial stays (e.g., 10 days, 15 days)
 - **Discount support** — apply discount amounts on rent invoices
@@ -126,9 +127,17 @@
 - **Payment callback page** — success page shown to tenants after payment
 - **Payments Dashboard** — view all payments with filters:
   - Filter by branch, status, payment type
-  - Filter by month and year
+  - Choose a month and year from one clear month selector
   - Search by tenant name or phone
 - **Receipt URLs** generated for paid invoices
+
+## 7A. 🛏️ Advance Bed Booking
+
+- **Quick reservation** — reserve a room using the person's basic details; an available bed is assigned automatically
+- **Direct WhatsApp form sharing** — opens a pre-addressed WhatsApp message using the saved booking phone number
+- **Booking QR code** — lets the person scan and open the secure, pre-filled admission form immediately
+- **Form state awareness** — once submitted, the booking card opens the received application for review instead of sharing an expired link
+- **Safe cancellation** — cancelling releases the reserved bed for someone else
 
 ---
 
@@ -148,6 +157,7 @@
   - Tenant room reallocated
 - **Mark as read** — individual or all-at-once
 - **Toggle alerts on/off** from Settings
+- **Silent background refresh** — live data updates do not show a distracting spinner; the refresh indicator appears only when the owner pulls down manually
 
 ---
 
@@ -155,7 +165,7 @@
 
 - **User profile display** — name, email, and role
 - **Change password**
-- **Auto-generate monthly rent** toggle — turn on/off automatic rent invoice creation
+- **Automatic monthly rent information** — explains that current-month bills are prepared during normal app refresh
 - **Notification alerts** toggle — enable/disable rent due/overdue/vacating alerts
 - **System currency** display (₹ Indian Rupee)
 - **App version info**

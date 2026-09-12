@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { View, StyleSheet, FlatList } from 'react-native';
 import { Searchbar, Card, Text, useTheme, SegmentedButtons, Button, IconButton } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
@@ -8,6 +8,7 @@ import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
+import ManualRefreshControl from '../../components/ManualRefreshControl';
 
 type AdmissionsListScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -23,7 +24,7 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Fetch admission applications
-  const { data: applications, isLoading, refetch, isRefetching } = useQuery<any[]>({
+  const { data: applications, isLoading, refetch } = useQuery<any[]>({
     queryKey: ['admissionsList', searchQuery, statusFilter],
     queryFn: async () => {
       const response = await apiClient.get('/admissions', {
@@ -159,7 +160,7 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
           renderItem={renderApplicationItem}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} colors={[theme.colors.primary]} />
+            <ManualRefreshControl onRefresh={refetch} color={theme.colors.primary} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>

@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
 import { buildUpiPaymentUrl, getSettingValue } from '../utils/upi';
-import { ensureCurrentMonthRentInvoice, getCalendarMonthRange, markOverdueRentInvoices, syncCurrentMonthRentDueDates } from '../utils/rentBilling';
+import { ensureCurrentMonthRentInvoicesForOwner, getCalendarMonthRange, markOverdueRentInvoices, syncCurrentMonthRentDueDates } from '../utils/rentBilling';
 import { createOwnerNotification } from '../services/notifications';
 
 export async function getPayments(req: AuthenticatedRequest, res: Response) {
@@ -25,6 +25,17 @@ export async function getPayments(req: AuthenticatedRequest, res: Response) {
   }
 
   try {
+    const now = new Date();
+    const requestedMonth = month ? Number(month) : now.getMonth() + 1;
+    const requestedYear = year ? Number(year) : now.getFullYear();
+    const isCurrentMonth = requestedMonth === now.getMonth() + 1 && requestedYear === now.getFullYear();
+    if (isCurrentMonth && (!paymentType || paymentType === 'RENT')) {
+      await ensureCurrentMonthRentInvoicesForOwner({
+        userId,
+        branchId: branchId ? String(branchId) : undefined,
+        now,
+      });
+    }
     await syncCurrentMonthRentDueDates({ userId });
     await markOverdueRentInvoices(userId);
     const payments = await prisma.payment.findMany({
@@ -70,40 +81,7 @@ export async function generateMonthlyRentDues(req: AuthenticatedRequest, res: Re
     const now = new Date();
     const { label: currentMonthLabel } = getCalendarMonthRange(now);
 
-    // Fetch all active tenants owned by user
-    const tenants = await prisma.tenant.findMany({
-      where: {
-        status: 'ACTIVE',
-        room: {
-          branch: { userId },
-        },
-      },
-      include: {
-        room: {
-          include: { branch: true },
-        },
-      },
-    });
-
-    let generatedCount = 0;
-    const skippedTenants: string[] = [];
-
-    for (const tenant of tenants) {
-      const result = await ensureCurrentMonthRentInvoice({
-        tenantId: tenant.id,
-        branchId: tenant.room.branchId,
-        monthlyRent: tenant.room.monthlyRent,
-        joiningDate: tenant.joiningDate,
-        now,
-      });
-
-      if (!result.created) {
-        skippedTenants.push(tenant.name);
-        continue;
-      }
-
-      generatedCount++;
-    }
+    const { generatedCount, skippedTenants } = await ensureCurrentMonthRentInvoicesForOwner({ userId, now });
 
     res.json({
       message: `${currentMonthLabel} advance rent bills are ready. Created ${generatedCount}; already available for ${skippedTenants.length}.`,

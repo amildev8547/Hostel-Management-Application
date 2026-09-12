@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Linking, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert, TextInput } from 'react-native';
 import { Text, Surface, Card, Button, useTheme, SegmentedButtons, Divider, IconButton, ActivityIndicator, Portal, Modal } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
@@ -10,6 +10,7 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert } from '../../utils/alerts';
 import { getBackendBaseUrl } from '../../utils/backendUrl';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
+import ManualRefreshControl from '../../components/ManualRefreshControl';
 
 type PaymentsDashboardRouteProp = RouteProp<RootStackParamList, 'PaymentsDashboard'>;
 type PaymentsDashboardNavigationProp = StackNavigationProp<RootStackParamList, 'PaymentsDashboard'>;
@@ -70,50 +71,9 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
     setMonthPickerVisible(false);
   };
 
-  const goToPrevMonth = () => {
-    if (selectedMonth === 0) {
-      setSelectedMonth(11);
-      setSelectedYear((y) => y - 1);
-    } else {
-      setSelectedMonth((m) => m - 1);
-    }
-  };
-
-  const goToNextMonth = () => {
-    if (isCurrentMonth) return;
-    if (selectedMonth === 11) {
-      setSelectedMonth(0);
-      setSelectedYear((y) => y + 1);
-    } else {
-      setSelectedMonth((m) => m + 1);
-    }
-  };
-
-  // Fetch payments list for the selected month
-  const { data: payments, isLoading, refetch, isRefetching } = useQuery<any[]>({
-    queryKey: ['paymentsList', branchId, activeSegment, selectedMonth, selectedYear],
-    queryFn: async () => {
-      // Set status filter based on segment selection
-      const statusMap: Record<string, string> = {
-        paid: 'PAID',
-        pending: 'PENDING',
-        overdue: 'OVERDUE',
-      };
-      const response = await apiClient.get('/payments', {
-        params: {
-          branchId,
-          status: statusMap[activeSegment],
-          paymentType: 'RENT',
-          month: selectedMonth + 1,
-          year: selectedYear,
-        },
-      });
-      return response.data;
-    },
-  });
-
-  // Calculate high level summaries from list, scoped to the selected month
-  const { data: allPayments } = useQuery<any[]>({
+  // One request supplies the totals and all three lists. For the current month,
+  // the backend also creates any missing resident bills before returning.
+  const { data: allPayments = [], isLoading, refetch } = useQuery<any[]>({
     queryKey: ['allPaymentsSummary', branchId, selectedMonth, selectedYear],
     queryFn: async () => {
       const response = await apiClient.get('/payments', {
@@ -123,31 +83,22 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
     },
   });
 
+  const statusMap: Record<string, string> = {
+    paid: 'PAID',
+    pending: 'PENDING',
+    overdue: 'OVERDUE',
+  };
+  const payments = allPayments.filter((payment: any) => payment.status === statusMap[activeSegment]);
+
   let collectedThisMonth = 0;
   let pendingCollection = 0;
   let overdueCollection = 0;
 
-  if (allPayments) {
-    allPayments.forEach((p: any) => {
-      if (p.status === 'PAID') collectedThisMonth += p.amount;
-      else if (p.status === 'PENDING') pendingCollection += p.amount;
-      else if (p.status === 'OVERDUE') overdueCollection += p.amount;
-    });
-  }
-
-  const handleGenerateDues = async () => {
-    setIsProcessing(true);
-    try {
-      const response = await apiClient.post('/payments/generate-dues');
-      await invalidateHostelData(queryClient, { branchId });
-      showAlert(response.data.message || 'Rent dues generation complete.');
-    } catch (err: any) {
-      console.error(err);
-      showAlert(err.response?.data?.error || 'Failed to generate dues');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  allPayments.forEach((p: any) => {
+    if (p.status === 'PAID') collectedThisMonth += p.amount;
+    else if (p.status === 'PENDING') pendingCollection += p.amount;
+    else if (p.status === 'OVERDUE') overdueCollection += p.amount;
+  });
 
   // Notify the tenant on WhatsApp that their payment has been received & approved
   const sendPaymentReceivedWhatsApp = async (pay: any, paymentMethod: string) => {
@@ -298,45 +249,29 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
     }
   };
 
-  // Legacy reminder (console-only, no payment link)
-  const handleSendReminder = async (paymentId: string) => {
-    setIsProcessing(true);
-    try {
-      const response = await apiClient.post(`/payments/${paymentId}/reminder`);
-      const { text, phone } = response.data;
-
-      // Construct WhatsApp link
-      const whatsappUrl = `https://wa.me/91${phone}?text=${encodeURIComponent(text)}`;
-      Linking.openURL(whatsappUrl).catch(() => {
-        showAlert('Could not open WhatsApp. Reminder printed to backend console.');
-      });
-    } catch (err: any) {
-      console.error(err);
-      showAlert('Failed to send reminder');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* 0. Month/Year Navigator */}
-      <View style={styles.monthNav}>
-        <IconButton icon="chevron-left" size={22} onPress={goToPrevMonth} style={{ margin: 0 }} />
-        <TouchableOpacity onPress={openMonthPicker} style={styles.monthNavLabel}>
-          <Icon name="calendar-month-outline" size={18} color={theme.colors.primary} />
-          <Text variant="titleMedium" style={styles.monthNavText}>
-            {MONTH_NAMES[selectedMonth]} {selectedYear}
-          </Text>
-        </TouchableOpacity>
-        <IconButton
-          icon="chevron-right"
-          size={22}
-          onPress={goToNextMonth}
-          disabled={isCurrentMonth}
-          style={{ margin: 0 }}
-        />
-      </View>
+      {/* One clear month selector replaces the old scrolling arrows. */}
+      <Surface style={styles.monthSelector} elevation={0}>
+        <View style={styles.monthSelectorIcon}>
+          <Icon name="calendar-month-outline" size={25} color={theme.colors.primary} />
+        </View>
+        <View style={styles.monthSelectorCopy}>
+          <Text style={styles.monthSelectorLabel}>Showing payments for</Text>
+          <Text style={styles.monthNavText}>{MONTH_NAMES[selectedMonth]} {selectedYear}</Text>
+        </View>
+        <Button mode="outlined" compact onPress={openMonthPicker} style={styles.changeMonthButton}>Change</Button>
+      </Surface>
+      {!isCurrentMonth && (
+        <Button
+          mode="text"
+          icon="calendar-today"
+          onPress={() => { setSelectedMonth(currentMonth); setSelectedYear(currentYear); }}
+          style={styles.currentMonthButton}
+        >
+          Return to this month
+        </Button>
+      )}
 
       <View style={styles.headerGrid}>
         <TouchableOpacity style={styles.headerCell} onPress={() => setActiveSegment('paid')} accessibilityRole="button">
@@ -360,23 +295,9 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
         <Icon name="calendar-check-outline" size={24} color={theme.colors.primary} />
         <View style={{ flex: 1 }}>
           <Text style={styles.advanceNoticeTitle}>Rent is collected in advance</Text>
-          <Text style={styles.advanceNoticeText}>The amounts below are for {MONTH_NAMES[selectedMonth]} {selectedYear}. Each resident's rent is due monthly on the day they joined (or the month's last day when needed).</Text>
+          <Text style={styles.advanceNoticeText}>The amounts below are for {MONTH_NAMES[selectedMonth]} {selectedYear}. Bills are prepared automatically. Each resident's rent is due monthly on the day they joined (or the month's last day when needed).</Text>
         </View>
       </Surface>
-
-      {/* 2. Operations trigger bar */}
-      <View style={styles.operationsBar}>
-        <Button
-          mode="contained"
-          icon="calendar-sync"
-          onPress={handleGenerateDues}
-          disabled={isProcessing}
-          loading={isProcessing}
-          style={{ flex: 1 }}
-        >
-          Create this month's advance rent bills
-        </Button>
-      </View>
 
       {/* 3. Navigation segments */}
       <View style={styles.segmentWrapper}>
@@ -400,7 +321,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
         <ScrollView
           contentContainerStyle={styles.listContainer}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} colors={[theme.colors.primary]} />
+            <ManualRefreshControl onRefresh={refetch} color={theme.colors.primary} />
           }
         >
           {activeSegment !== 'paid' && payments && payments.length > 0 && (
@@ -461,6 +382,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
                             iconColor={theme.colors.primary}
                             size={18}
                             style={styles.actionIconButton}
+                            disabled={isProcessing}
                             onPress={() => openEditAmountModal(pay)}
                           />
                           <IconButton
@@ -468,6 +390,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
                             iconColor="#25D366"
                             size={20}
                             style={styles.actionIconButton}
+                            disabled={isProcessing}
                             onPress={() => handleShareManualPayment(pay)}
                           />
                           <IconButton
@@ -475,6 +398,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
                             iconColor={(theme.colors as any).success}
                             size={20}
                             style={styles.actionIconButton}
+                            disabled={isProcessing}
                             onPress={() => handleRecordManualPayment(pay)}
                           />
                         </View>
@@ -625,22 +549,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  monthNav: {
+  monthSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 12,
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  monthNavLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-  },
+  monthSelectorIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center' },
+  monthSelectorCopy: { flex: 1, marginHorizontal: 11 },
+  monthSelectorLabel: { color: '#64748B', fontSize: 12, fontWeight: '600', marginBottom: 2 },
   monthNavText: {
     fontWeight: '800',
     color: '#0F172A',
   },
+  changeMonthButton: { borderRadius: 10 },
+  currentMonthButton: { alignSelf: 'center', marginTop: 2 },
   yearStepper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -698,11 +626,6 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   tapSummary: { color: '#64748B', fontSize: 10, fontWeight: '600', marginTop: 4 },
-  operationsBar: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
   advanceNotice: {
     flexDirection: 'row',
     alignItems: 'center',

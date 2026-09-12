@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Image, Modal, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, Image, Modal, TouchableOpacity } from 'react-native';
 import { Text, Surface, Card, Button, useTheme, Divider, SegmentedButtons } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
@@ -9,6 +9,7 @@ import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
+import ManualRefreshControl from '../../components/ManualRefreshControl';
 
 type AdmissionReviewRouteProp = RouteProp<RootStackParamList, 'AdmissionReview'>;
 type AdmissionReviewNavigationProp = StackNavigationProp<RootStackParamList, 'AdmissionReview'>;
@@ -27,7 +28,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
   const [activeImageModal, setActiveImageModal] = useState<string | null>(null);
 
   // Fetch application details
-  const { data: application, isLoading: appLoading, refetch, isRefetching } = useQuery<any>({
+  const { data: application, isLoading: appLoading, refetch } = useQuery<any>({
     queryKey: ['admissionDetails', applicationId],
     queryFn: async () => {
       const response = await apiClient.get(`/admissions/${applicationId}`);
@@ -157,7 +158,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       refreshControl={
-        <RefreshControl refreshing={isRefetching} onRefresh={refetch} colors={[theme.colors.primary]} />
+        <ManualRefreshControl onRefresh={refetch} color={theme.colors.primary} />
       }
     >
       {/* Zoom Image Modal */}

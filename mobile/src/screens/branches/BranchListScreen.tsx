@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { Searchbar, Card, Text, FAB, useTheme, Surface } from 'react-native-paper';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import ManualRefreshControl from '../../components/ManualRefreshControl';
 
 type BranchListScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -17,7 +18,7 @@ export default function BranchListScreen({ navigation }: BranchListScreenProps) 
   const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
 
-  const { data: branches, isLoading, refetch, isRefetching } = useQuery<any[]>({
+  const { data: branches, isLoading, refetch } = useQuery<any[]>({
     queryKey: ['branchesList', searchQuery],
     queryFn: async () => {
       const response = await apiClient.get('/branches', {
@@ -96,7 +97,7 @@ export default function BranchListScreen({ navigation }: BranchListScreenProps) 
           renderItem={renderBranchItem}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} colors={[theme.colors.primary]} />
+            <ManualRefreshControl onRefresh={refetch} color={theme.colors.primary} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>

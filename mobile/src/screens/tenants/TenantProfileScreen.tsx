@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Image, Modal, TouchableOpacity, Linking } from 'react-native';
+import { View, StyleSheet, ScrollView, Image, Modal, TouchableOpacity, Linking } from 'react-native';
 import { Text, Surface, Card, Button, useTheme, Divider, List, Portal, Dialog, TextInput, Chip, IconButton } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
@@ -10,6 +10,7 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { getBackendBaseUrl } from '../../utils/backendUrl';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
+import ManualRefreshControl from '../../components/ManualRefreshControl';
 
 type TenantProfileRouteProp = RouteProp<RootStackParamList, 'TenantProfile'>;
 type TenantProfileNavigationProp = StackNavigationProp<RootStackParamList, 'TenantProfile'>;
@@ -36,7 +37,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
   const [discountInput, setDiscountInput] = useState('0');
   const [isSavingInvoice, setIsSavingInvoice] = useState(false);
 
-  const { data: tenant, isLoading, refetch, isRefetching } = useQuery<any>({
+  const { data: tenant, isLoading, refetch } = useQuery<any>({
     queryKey: ['tenantProfile', tenantId],
     queryFn: async () => {
       const response = await apiClient.get(`/tenants/${tenantId}`);
@@ -226,7 +227,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       refreshControl={
-        <RefreshControl refreshing={isRefetching} onRefresh={refetch} colors={[theme.colors.primary]} />
+        <ManualRefreshControl onRefresh={refetch} color={theme.colors.primary} />
       }
     >
       {/* Image Modal for Aadhaar zooming */}

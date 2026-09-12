@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, Surface, Card, Button, useTheme, Avatar, List, Divider, IconButton } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
@@ -10,6 +10,7 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { occupancyColors, occupancyLabels } from '../../theme';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
+import ManualRefreshControl from '../../components/ManualRefreshControl';
 
 type RoomDetailsRouteProp = RouteProp<RootStackParamList, 'RoomDetails'>;
 type RoomDetailsNavigationProp = StackNavigationProp<RootStackParamList, 'RoomDetails'>;
@@ -27,7 +28,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
   const theme = useTheme();
   const queryClient = useQueryClient();
 
-  const { data: room, isLoading, refetch, isRefetching } = useQuery<any>({
+  const { data: room, isLoading, refetch } = useQuery<any>({
     queryKey: ['roomDetails', roomId],
     queryFn: async () => {
       const response = await apiClient.get(`/rooms/${roomId}`);
@@ -71,7 +72,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       refreshControl={
-        <RefreshControl refreshing={isRefetching} onRefresh={refetch} colors={[theme.colors.primary]} />
+        <ManualRefreshControl onRefresh={refetch} color={theme.colors.primary} />
       }
     >
       {/* 1. Header Card */}

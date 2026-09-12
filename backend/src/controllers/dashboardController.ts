@@ -1,12 +1,18 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
-import { getCalendarMonthRange, markOverdueRentInvoices, syncCurrentMonthRentDueDates } from '../utils/rentBilling';
+import { ensureCurrentMonthRentInvoicesForOwner, getCalendarMonthRange, markOverdueRentInvoices, syncCurrentMonthRentDueDates } from '../utils/rentBilling';
 
 export async function getHomeDashboard(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
+  const now = new Date();
+  const activityMonth = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
+  const activityYear = req.query.year ? Number(req.query.year) : now.getFullYear();
 
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!Number.isInteger(activityMonth) || activityMonth < 1 || activityMonth > 12 || !Number.isInteger(activityYear) || activityYear < 2000 || activityYear > 2200) {
+    return res.status(400).json({ error: 'Choose a valid month and year.' });
+  }
 
   try {
     // 1. Fetch all branches owned by user
@@ -43,11 +49,13 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
     const occupancyPercentage = totalCapacity > 0 ? Math.round((occupiedBeds / totalCapacity) * 100) : 0;
 
     // 2. Fetch payments for current month to compute collection metrics
-    const now = new Date();
     const { start: startOfMonth, nextStart } = getCalendarMonthRange(now);
 
     const branchIds = branches.map((b) => b.id);
 
+    // Rent bills are prepared automatically while the home/payment data refreshes.
+    // The owner no longer needs a separate "create bills" action in the app.
+    await ensureCurrentMonthRentInvoicesForOwner({ userId, now });
     await syncCurrentMonthRentDueDates({ userId, now });
     await markOverdueRentInvoices(userId);
     const payments = await prisma.payment.findMany({
@@ -82,6 +90,24 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
         status: 'PENDING',
       },
     });
+
+    const activityStart = new Date(activityYear, activityMonth - 1, 1);
+    const activityEnd = new Date(activityYear, activityMonth, 1);
+    const [residentsJoined, residentsLeft] = await Promise.all([
+      prisma.tenant.count({
+        where: {
+          joiningDate: { gte: activityStart, lt: activityEnd },
+          room: { branch: { userId } },
+        },
+      }),
+      prisma.tenant.count({
+        where: {
+          status: 'VACATED',
+          leavingDate: { gte: activityStart, lt: activityEnd },
+          room: { branch: { userId } },
+        },
+      }),
+    ]);
 
     // 4. Recent activities
     // - New Admissions (recent 5 applications)
@@ -137,6 +163,12 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
         recentAdmissions,
         recentPayments,
         recentAllocations,
+      },
+      residentMovement: {
+        month: activityMonth,
+        year: activityYear,
+        joined: residentsJoined,
+        left: residentsLeft,
       },
     });
   } catch (error) {

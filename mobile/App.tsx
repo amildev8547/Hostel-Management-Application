@@ -25,7 +25,9 @@ const queryClient = new QueryClient({
       refetchOnMount: 'always',
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
-      refetchInterval: 20000,
+      // Keep live data reasonably fresh without repeatedly animating or interrupting
+      // navigation. Visible refresh indicators are reserved for pull-to-refresh.
+      refetchInterval: 60000,
       refetchIntervalInBackground: false,
     },
   },
@@ -34,20 +36,18 @@ const queryClient = new QueryClient({
 async function prepareInitialDashboard(signal: AbortSignal) {
   const now = new Date();
   const initialRequests = await Promise.allSettled([
-    apiClient.get('/dashboard', { signal }),
+    apiClient.get('/dashboard', { params: { month: now.getMonth() + 1, year: now.getFullYear() }, signal }),
     apiClient.get('/branches', { signal }),
     apiClient.get('/admissions', { params: { status: 'PENDING' }, signal }),
     apiClient.get('/tenants', { params: { status: 'ACTIVE' }, signal }),
-    apiClient.get('/payments', { params: { status: 'PENDING', paymentType: 'RENT', month: now.getMonth() + 1, year: now.getFullYear() }, signal }),
     apiClient.get('/payments', { params: { paymentType: 'RENT', month: now.getMonth() + 1, year: now.getFullYear() }, signal }),
   ]);
 
   const cacheKeys = [
-    ['dashboardMetrics'],
+    ['dashboardMetrics', now.getMonth(), now.getFullYear()],
     ['branchesList', ''],
     ['admissionsList', '', 'PENDING'],
     ['tenantsList', '', 'ACTIVE'],
-    ['paymentsList', undefined, 'pending', now.getMonth(), now.getFullYear()],
     ['allPaymentsSummary', undefined, now.getMonth(), now.getFullYear()],
   ];
   initialRequests.forEach((result, index) => {

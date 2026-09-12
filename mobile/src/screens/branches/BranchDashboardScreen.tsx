@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Share, Clipboard, FlatList } from 'react-native';
-import { Text, Surface, Card, Button, useTheme, SegmentedButtons, List, Divider } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Share, Clipboard } from 'react-native';
+import { Text, Surface, Card, Button, useTheme, SegmentedButtons } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
@@ -11,6 +11,7 @@ import { occupancyColors, occupancyLabels } from '../../theme';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { getApplyUrl } from '../../utils/backendUrl';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
+import ManualRefreshControl from '../../components/ManualRefreshControl';
 
 type BranchDashboardRouteProp = RouteProp<RootStackParamList, 'BranchDashboard'>;
 type BranchDashboardNavigationProp = StackNavigationProp<RootStackParamList, 'BranchDashboard'>;
@@ -39,7 +40,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
   const [roomFilter, setRoomFilter] = useState<RoomFilter>('all');
 
   // Fetch branch dashboard data
-  const { data: dashboardData, isLoading: dashboardLoading, refetch: refetchDashboard, isRefetching: isRefetchingDashboard } = useQuery({
+  const { data: dashboardData, isLoading: dashboardLoading, refetch: refetchDashboard } = useQuery({
     queryKey: ['branchDashboard', branchId],
     queryFn: async () => {
       const response = await apiClient.get(`/branches/${branchId}/dashboard`);
@@ -48,7 +49,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
   });
 
   // Fetch rooms list for this branch
-  const { data: rooms, isLoading: roomsLoading, refetch: refetchRooms, isRefetching: isRefetchingRooms } = useQuery<any[]>({
+  const { data: rooms, isLoading: roomsLoading, refetch: refetchRooms } = useQuery<any[]>({
     queryKey: ['branchRooms', branchId],
     queryFn: async () => {
       const response = await apiClient.get('/rooms', { params: { branchId } });
@@ -127,10 +128,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
     );
   }
 
-  const handleRefreshAll = () => {
-    refetchDashboard();
-    refetchRooms();
-  };
+  const handleRefreshAll = () => Promise.all([refetchDashboard(), refetchRooms()]);
 
   const showRooms = (filter: RoomFilter) => {
     setRoomFilter(filter);
@@ -161,11 +159,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         refreshControl={
-          <RefreshControl
-            refreshing={isRefetchingDashboard || isRefetchingRooms}
-            onRefresh={handleRefreshAll}
-            colors={[theme.colors.primary]}
-          />
+          <ManualRefreshControl onRefresh={handleRefreshAll} color={theme.colors.primary} />
         }
       >
         {activeSegment === 'overview' ? (

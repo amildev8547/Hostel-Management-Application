@@ -182,7 +182,9 @@ export default function AppNavigator() {
     <NavigationContainer
       ref={navigationRef}
       onReady={() => pendingPushData && openPushNotification(pendingPushData)}
-      onStateChange={() => void queryClient.refetchQueries({ type: 'active' })}
+      // Refresh only stale active data after navigation. This stays silent in the UI;
+      // the visible spinner is now reserved for a deliberate pull-to-refresh.
+      onStateChange={() => void queryClient.refetchQueries({ type: 'active', stale: true })}
     >
       <RootStack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#FFFFFF' }, headerTitleStyle: { fontWeight: '600' } }}>
         <RootStack.Screen name="Main" component={TabNavigator} options={{ headerShown: false }} />

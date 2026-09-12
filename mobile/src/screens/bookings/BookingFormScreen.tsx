@@ -31,7 +31,7 @@ export default function BookingFormScreen({ route, navigation }: Props) {
     try {
       await apiClient.post('/bookings', { name: name.trim(), phone: cleanPhone, branchId, roomId, expectedJoiningDate: formatDateForApi(joiningDate), notes: notes.trim() || undefined });
       await Promise.all([queryClient.invalidateQueries({ queryKey: ['bookings'] }), queryClient.invalidateQueries({ queryKey: ['branchRooms'] }), queryClient.invalidateQueries({ queryKey: ['branchDashboard'] }), queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] })]);
-      showAlert('Bed reserved successfully. You can now share the admission form.', 'Booking created', () => navigation.replace('BookingList'));
+      showAlert('Bed reserved successfully. On the next screen, send the form directly on WhatsApp or show its QR code.', 'Booking created', () => navigation.replace('BookingList'));
     } catch (error: any) {
       const status = error.response?.status;
       const message = status === 404

@@ -1,5 +1,5 @@
 import React, { useMemo, useRef } from 'react';
-import { Animated, PanResponder, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Animated, PanResponder, ScrollView, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { ActivityIndicator, Button, Surface, Text, useTheme } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
@@ -7,6 +7,7 @@ import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigat
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { applyLocalNotificationState, rememberNotificationHidden, rememberNotificationsSeen } from '../../services/storage';
+import ManualRefreshControl from '../../components/ManualRefreshControl';
 import * as Notifications from 'expo-notifications';
 
 type NotificationsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Notifications'>;
@@ -21,7 +22,7 @@ const ICONS: Record<string, { name: keyof typeof Icon.glyphMap; color: string }>
 
 export default function NotificationsScreen({ navigation }: { navigation: NotificationsScreenNavigationProp }) {
   const theme = useTheme(); const queryClient = useQueryClient();
-  const { data, isLoading, refetch, isRefetching } = useQuery<NotificationData>({ queryKey: ['notifications'], queryFn: async () => applyLocalNotificationState((await apiClient.get('/notifications')).data) });
+  const { data, isLoading, refetch } = useQuery<NotificationData>({ queryKey: ['notifications'], queryFn: async () => applyLocalNotificationState((await apiClient.get('/notifications')).data) });
   const notifications = data?.notifications || [];
   const updateCache = (update: (current: NotificationData) => NotificationData) => queryClient.setQueryData<NotificationData>(['notifications'], (current) => update(current || { notifications: [], unreadCount: 0 }));
 
@@ -59,7 +60,7 @@ export default function NotificationsScreen({ navigation }: { navigation: Notifi
   };
 
   if (isLoading) return <View style={[styles.center, { backgroundColor: theme.colors.background }]}><ActivityIndicator size="large" color={theme.colors.primary} /></View>;
-  return <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.listContainer} refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} colors={[theme.colors.primary]} />}>
+  return <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.listContainer} refreshControl={<ManualRefreshControl onRefresh={refetch} color={theme.colors.primary} />}>
     <Surface style={styles.infoBox} elevation={0}><Text style={styles.infoTitle}>Important reminders</Text><Text style={styles.infoText}>Tap a reminder to open it. Swipe either way to remove it.</Text></Surface>
     {notifications.length > 0 && <View style={styles.headerRow}><Text variant="bodySmall" style={styles.countText}>{data?.unreadCount || 0} new reminders</Text><Button mode="text" compact disabled={!data?.unreadCount} onPress={handleMarkAllRead}>Mark all seen</Button></View>}
     {notifications.length === 0 ? <View style={styles.emptyContainer}><Icon name="bell-check-outline" size={48} color="#94A3B8" /><Text style={styles.emptyText}>No reminders need your attention.</Text></View> : notifications.map((item) => <SwipeableNotification key={item.id} item={item} onPress={() => handlePress(item)} onRemove={() => handleRemove(item)} />)}

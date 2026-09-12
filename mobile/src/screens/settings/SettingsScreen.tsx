@@ -40,15 +40,6 @@ export default function SettingsScreen() {
     setPaymentWhatsapp(settings?.payment_whatsapp_number || '');
   }, [settings]);
 
-  const handleToggleAutoRent = (value: boolean) => {
-    updateSettingMutation.mutate({
-      key: 'rent_auto_generate',
-      value: String(value),
-    });
-  };
-
-  const autoRentVal = settings?.rent_auto_generate === 'true';
-
   const handleToggleNotificationAlerts = (value: boolean) => {
     updateSettingMutation.mutate({
       key: 'notification_alerts_enabled',
@@ -94,17 +85,11 @@ export default function SettingsScreen() {
       <Card style={styles.settingsCard}>
         <Card.Content style={{ padding: 0 }}>
           <List.Item
-            title="Create monthly rent bills automatically"
+            title="Monthly rent bills"
             titleNumberOfLines={2}
-            description="Prepare the current month's advance rent bills for everyone"
+            description="Prepared automatically during the normal app refresh"
             left={(props) => <List.Icon {...props} icon="calendar-check" />}
-            right={() => (
-              <Switch
-                value={autoRentVal}
-                onValueChange={handleToggleAutoRent}
-                color={theme.colors.primary}
-              />
-            )}
+            right={(props) => <List.Icon {...props} icon="check-circle" color="#059669" />}
           />
           <Divider />
           <List.Item

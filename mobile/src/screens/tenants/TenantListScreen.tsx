@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { View, StyleSheet, FlatList } from 'react-native';
 import { Searchbar, Card, Text, Avatar, useTheme, SegmentedButtons } from 'react-native-paper';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import ManualRefreshControl from '../../components/ManualRefreshControl';
 
 type TenantListScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -19,7 +20,7 @@ export default function TenantListScreen({ navigation }: TenantListScreenProps) 
   const [statusFilter, setStatusFilter] = useState('ACTIVE');
 
   // Fetch tenants
-  const { data: tenants, isLoading, refetch, isRefetching } = useQuery<any[]>({
+  const { data: tenants, isLoading, refetch } = useQuery<any[]>({
     queryKey: ['tenantsList', searchQuery, statusFilter],
     queryFn: async () => {
       const response = await apiClient.get('/tenants', {
@@ -116,7 +117,7 @@ export default function TenantListScreen({ navigation }: TenantListScreenProps) 
           renderItem={renderTenantItem}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} colors={[theme.colors.primary]} />
+            <ManualRefreshControl onRefresh={refetch} color={theme.colors.primary} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
