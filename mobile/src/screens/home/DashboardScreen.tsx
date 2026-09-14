@@ -36,7 +36,9 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const metrics = dashboardData?.metrics || { totalBranches: 0, totalRooms: 0, totalCapacity: 0, occupiedBeds: 0, reservedBeds: 0, vacantBeds: 0, monthlyCollection: 0, pendingCollection: 0, overdueCollection: 0, pendingAdmissions: 0 };
   const legacyMovement = dashboardData?.residentMovement || { joined: 0, left: 0 };
   const residentMovementHistory = dashboardData?.residentMovementHistory?.length
-    ? dashboardData.residentMovementHistory
+    ? [...dashboardData.residentMovementHistory].sort(
+        (a, b) => Number(a.year) - Number(b.year) || Number(a.month) - Number(b.month),
+      )
     : Array.from({ length: 12 }, (_, index) => {
         const today = new Date();
         const date = new Date(today.getFullYear(), today.getMonth() - (11 - index), 1);
@@ -102,6 +104,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chartContent}
           style={styles.chartScroll}
+          onLayout={() => movementScrollRef.current?.scrollToEnd({ animated: false })}
           onContentSizeChange={() => movementScrollRef.current?.scrollToEnd({ animated: false })}
         >
           {residentMovementHistory.map((item: any) => {

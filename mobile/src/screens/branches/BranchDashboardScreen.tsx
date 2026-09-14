@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Share, Clipboard } from 'react-native';
-import { Text, Surface, Card, Button, useTheme, SegmentedButtons } from 'react-native-paper';
+import { Text, Surface, Card, Button, useTheme } from 'react-native-paper';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
@@ -25,10 +25,10 @@ type RoomFilter = 'all' | 'occupiedBeds' | 'vacantBeds' | 'AVAILABLE' | 'PARTIAL
 
 const roomFilterLabels: Record<RoomFilter, string> = {
   all: 'All rooms',
-  occupiedBeds: 'Rooms with people staying',
-  vacantBeds: 'Rooms with a free bed',
+  occupiedBeds: 'Beds in use',
+  vacantBeds: 'Rooms with free beds',
   AVAILABLE: 'Empty rooms',
-  PARTIAL: 'Rooms with some beds free',
+  PARTIAL: 'Some beds free',
   FULL: 'Full rooms',
 };
 
@@ -145,15 +145,27 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.tabContainer}>
-        <SegmentedButtons
-          value={activeSegment}
-          onValueChange={setActiveSegment}
-          buttons={[
-            { value: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
-            { value: 'rooms', label: 'View Rooms', icon: 'door-open' },
-          ]}
-          theme={{ colors: { primary: theme.colors.primary } }}
-        />
+        <View style={styles.mainTabs}>
+          <TouchableOpacity
+            style={[styles.mainTab, activeSegment === 'overview' && styles.mainTabActive]}
+            onPress={() => setActiveSegment('overview')}
+            accessibilityRole="tab"
+          >
+            <Icon name="view-dashboard-outline" size={20} color={activeSegment === 'overview' ? '#4F46E5' : '#64748B'} />
+            <Text style={[styles.mainTabText, activeSegment === 'overview' && styles.mainTabTextActive]}>Overview</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.mainTab, activeSegment === 'rooms' && styles.mainTabActive]}
+            onPress={() => setActiveSegment('rooms')}
+            accessibilityRole="tab"
+          >
+            <Icon name="door-open" size={20} color={activeSegment === 'rooms' ? '#4F46E5' : '#64748B'} />
+            <Text style={[styles.mainTabText, activeSegment === 'rooms' && styles.mainTabTextActive]}>Rooms</Text>
+            <View style={[styles.mainTabCount, activeSegment === 'rooms' && styles.mainTabCountActive]}>
+              <Text style={[styles.mainTabCountText, activeSegment === 'rooms' && styles.mainTabCountTextActive]}>{metrics.totalRooms}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -164,66 +176,55 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
       >
         {activeSegment === 'overview' ? (
           <>
-            {/* 1. Bed metrics */}
+            {/* 1. Availability */}
             <Surface style={styles.statsCard} elevation={1}>
-              <Text variant="titleMedium" style={styles.cardTitle}>Beds</Text>
-              <Text style={styles.cardHint}>Tap a number to see matching rooms.</Text>
-              <View style={styles.bedsStatRow}>
-                <TouchableOpacity style={styles.bedsStatCell} onPress={() => showRooms('all')} accessibilityRole="button">
-                  <Text variant="titleLarge" style={{ fontWeight: '800', color: theme.colors.primary }}>
-                    {metrics.totalBeds}
+              <Text variant="titleMedium" style={styles.cardTitle}>Space available</Text>
+              <Text style={styles.cardHint}>See where a new resident can stay.</Text>
+
+              <TouchableOpacity style={styles.freeBedsBanner} onPress={() => showRooms('vacantBeds')} accessibilityRole="button">
+                <View style={styles.freeBedsIcon}><Icon name="bed-empty" size={27} color="#047857" /></View>
+                <View style={styles.freeBedsCopy}>
+                  <Text style={styles.freeBedsTitle}>
+                    {metrics.totalBeds === 0
+                      ? 'No beds added yet'
+                      : metrics.vacantBeds === 0
+                        ? 'All beds are in use'
+                        : `${metrics.vacantBeds} ${metrics.vacantBeds === 1 ? 'bed is' : 'beds are'} free`}
                   </Text>
-                  <Text variant="bodySmall" style={styles.bedsStatLabel}>All beds</Text>
-                  <Text style={styles.tapLabel}>View rooms</Text>
+                  <Text style={styles.freeBedsHint}>{metrics.vacantBeds > 0 ? 'Tap to find an available room' : 'Tap to view rooms'}</Text>
+                </View>
+                <Icon name="chevron-right" size={23} color="#047857" />
+              </TouchableOpacity>
+
+              <View style={styles.roomsHeader}>
+                <Text style={styles.roomsTitle}>Rooms</Text>
+                <TouchableOpacity onPress={() => showRooms('all')} accessibilityRole="button">
+                  <Text style={styles.viewAllText}>View all</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.bedsStatCell} onPress={() => showRooms('occupiedBeds')} accessibilityRole="button">
-                  <Text variant="titleLarge" style={{ fontWeight: '800', color: (theme.colors as any).success }}>
-                    {metrics.occupiedBeds}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.bedsStatLabel}>Beds in use</Text>
-                  <Text style={styles.tapLabel}>View rooms</Text>
+              </View>
+              <View style={styles.roomStatusList}>
+                <TouchableOpacity style={styles.roomStatusRow} onPress={() => showRooms('AVAILABLE')} accessibilityRole="button">
+                  <View style={[styles.roomStatusIcon, { backgroundColor: '#ECFDF5' }]}><Icon name="door-open" size={20} color="#059669" /></View>
+                  <Text style={styles.roomStatusLabel}>Completely empty rooms</Text>
+                  <Text style={styles.roomStatusCount}>{metrics.vacantRooms}</Text>
+                  <Icon name="chevron-right" size={20} color="#94A3B8" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.bedsStatCell} onPress={() => showRooms('vacantBeds')} accessibilityRole="button">
-                  <Text variant="titleLarge" style={{ fontWeight: '800', color: (theme.colors as any).warning }}>
-                    {metrics.vacantBeds}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.bedsStatLabel}>Free beds</Text>
-                  <Text style={styles.tapLabel}>View rooms</Text>
+                <TouchableOpacity style={styles.roomStatusRow} onPress={() => showRooms('PARTIAL')} accessibilityRole="button">
+                  <View style={[styles.roomStatusIcon, { backgroundColor: '#FFFBEB' }]}><Icon name="bed-outline" size={20} color="#D97706" /></View>
+                  <Text style={styles.roomStatusLabel}>Rooms with some beds free</Text>
+                  <Text style={styles.roomStatusCount}>{metrics.partialRooms}</Text>
+                  <Icon name="chevron-right" size={20} color="#94A3B8" />
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.roomStatusRow, styles.lastRoomStatus]} onPress={() => showRooms('FULL')} accessibilityRole="button">
+                  <View style={[styles.roomStatusIcon, { backgroundColor: '#FEF2F2' }]}><Icon name="door-closed" size={20} color="#DC2626" /></View>
+                  <Text style={styles.roomStatusLabel}>Full rooms</Text>
+                  <Text style={styles.roomStatusCount}>{metrics.occupiedRooms}</Text>
+                  <Icon name="chevron-right" size={20} color="#94A3B8" />
                 </TouchableOpacity>
               </View>
             </Surface>
 
-            {/* 2. Room States */}
-            <Surface style={styles.statsCard} elevation={1}>
-              <Text variant="titleMedium" style={styles.cardTitle}>Rooms by availability</Text>
-              <Text style={styles.cardHint}>Tap a type to open that list.</Text>
-              <View style={styles.roomsStateRow}>
-                <TouchableOpacity style={styles.roomCell} onPress={() => showRooms('all')} accessibilityRole="button">
-                  <Text variant="titleMedium" style={{ fontWeight: '800', color: theme.colors.primary }}>{metrics.totalRooms}</Text>
-                  <Text variant="bodySmall" style={styles.roomCellLabel}>All</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.roomCell} onPress={() => showRooms('AVAILABLE')} accessibilityRole="button">
-                  <Text variant="titleMedium" style={{ fontWeight: '800', color: (theme.colors as any).success }}>
-                    {metrics.vacantRooms}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.roomCellLabel}>Empty</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.roomCell} onPress={() => showRooms('PARTIAL')} accessibilityRole="button">
-                  <Text variant="titleMedium" style={{ fontWeight: '800', color: (theme.colors as any).warning }}>
-                    {metrics.partialRooms}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.roomCellLabel}>Some free</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.roomCell} onPress={() => showRooms('FULL')} accessibilityRole="button">
-                  <Text variant="titleMedium" style={{ fontWeight: '800', color: theme.colors.error }}>
-                    {metrics.occupiedRooms}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.roomCellLabel}>Full</Text>
-                </TouchableOpacity>
-              </View>
-            </Surface>
-
-            {/* 3. Payments */}
+            {/* 2. Payments */}
             <Surface style={styles.statsCard} elevation={1}>
               <Text variant="titleMedium" style={styles.cardTitle}>Branch Collections</Text>
               <View style={styles.paymentsGrid}>
@@ -278,13 +279,20 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
                 <Icon name="chevron-right" size={21} color="#7C3AED" />
               </TouchableOpacity>
             )}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+            <View style={styles.filterRow}>
               {(['all', 'AVAILABLE', 'PARTIAL', 'FULL'] as RoomFilter[]).map((filter) => (
-                <Button key={filter} mode={roomFilter === filter ? 'contained' : 'outlined'} compact={false} onPress={() => setRoomFilter(filter)} style={styles.filterButton}>
-                  {filter === 'all' ? 'All' : filter === 'AVAILABLE' ? 'Empty' : filter === 'PARTIAL' ? 'Some free' : 'Full'}
-                </Button>
+                <TouchableOpacity
+                  key={filter}
+                  style={[styles.filterTab, roomFilter === filter && styles.filterTabActive]}
+                  onPress={() => setRoomFilter(filter)}
+                  accessibilityRole="tab"
+                >
+                  <Text style={[styles.filterTabText, roomFilter === filter && styles.filterTabTextActive]}>
+                    {filter === 'all' ? 'All' : filter === 'AVAILABLE' ? 'Empty' : filter === 'PARTIAL' ? 'Some free' : 'Full'}
+                  </Text>
+                </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
             {roomsLoading ? (
               <Text>Loading Rooms...</Text>
             ) : filteredRooms.length > 0 ? (
@@ -351,11 +359,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tabContainer: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderColor: '#E2E8F0',
   },
+  mainTabs: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 13, padding: 4, gap: 4 },
+  mainTab: { flex: 1, minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 10 },
+  mainTabActive: { backgroundColor: '#FFFFFF' },
+  mainTabText: { color: '#64748B', fontSize: 14, fontWeight: '700' },
+  mainTabTextActive: { color: '#312E81' },
+  mainTabCount: { minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
+  mainTabCountActive: { backgroundColor: '#EEF2FF' },
+  mainTabCountText: { color: '#64748B', fontSize: 11, fontWeight: '800' },
+  mainTabCountTextActive: { color: '#4F46E5' },
   statsCard: {
     padding: 16,
     borderRadius: 16,
@@ -365,52 +383,36 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontWeight: '700',
     color: '#334155',
+    fontSize: 16,
+    lineHeight: 21,
     marginBottom: 2,
   },
   cardHint: { color: '#64748B', fontSize: 13, marginBottom: 14 },
-  bedsStatRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  bedsStatCell: {
-    flex: 1,
-    alignItems: 'center',
-    minHeight: 82,
-    justifyContent: 'center',
-    borderRadius: 12,
-    paddingHorizontal: 4,
-  },
-  bedsStatLabel: {
-    color: '#64748B',
-    marginTop: 4,
-    fontWeight: '600',
-  },
-  roomsStateRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  roomCell: {
-    flex: 1,
-    alignItems: 'center',
-    minHeight: 68,
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  roomCellLabel: {
-    color: '#64748B',
-    marginTop: 4,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  tapLabel: { color: '#4F46E5', fontSize: 11, fontWeight: '700', marginTop: 5 },
+  freeBedsBanner: { minHeight: 76, flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', borderRadius: 14, padding: 13 },
+  freeBedsIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#D1FAE5', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  freeBedsCopy: { flex: 1, minWidth: 0 },
+  freeBedsTitle: { color: '#065F46', fontSize: 16, lineHeight: 22, fontWeight: '800' },
+  freeBedsHint: { color: '#047857', fontSize: 12, marginTop: 2 },
+  roomsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, marginBottom: 7 },
+  roomsTitle: { color: '#334155', fontSize: 15, fontWeight: '800' },
+  viewAllText: { color: '#4F46E5', fontSize: 12, fontWeight: '700' },
+  roomStatusList: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, overflow: 'hidden' },
+  roomStatusRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 11, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  lastRoomStatus: { borderBottomWidth: 0 },
+  roomStatusIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  roomStatusLabel: { flex: 1, color: '#334155', fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  roomStatusCount: { minWidth: 28, textAlign: 'center', color: '#0F172A', fontSize: 16, fontWeight: '800' },
   reservedNotice: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F3E8FF', padding: 12, borderRadius: 12, marginBottom: 12 },
   reservedNoticeText: { flex: 1, color: '#6B21A8', fontSize: 13, fontWeight: '800' },
   resultsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 },
   resultsTitleWrap: { flex: 1, minWidth: 0 },
-  resultsTitle: { color: '#0F172A', fontWeight: '800' },
+  resultsTitle: { color: '#0F172A', fontSize: 18, lineHeight: 23, fontWeight: '800' },
   resultsCount: { color: '#64748B', fontSize: 14, marginTop: 3 },
-  filterRow: { gap: 8, paddingBottom: 16 },
-  filterButton: { borderRadius: 12 },
+  filterRow: { flexDirection: 'row', backgroundColor: '#E2E8F0', borderRadius: 12, padding: 3, gap: 3, marginBottom: 16 },
+  filterTab: { flex: 1, minWidth: 0, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 9, paddingHorizontal: 2 },
+  filterTabActive: { backgroundColor: '#4F46E5' },
+  filterTabText: { color: '#475569', fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  filterTabTextActive: { color: '#FFFFFF' },
   paymentsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -430,6 +432,8 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontWeight: '800',
     color: '#0F172A',
+    fontSize: 16,
+    lineHeight: 21,
     marginBottom: 12,
     marginTop: 8,
   },
