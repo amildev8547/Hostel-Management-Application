@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { TextInput, Button, Text, HelperText, useTheme, SegmentedButtons, Surface } from 'react-native-paper';
+import { TextInput, Button, Text, useTheme, SegmentedButtons, Surface } from 'react-native-paper';
 import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { roomFormSchema } from '../../validations/schemas';
 import apiClient from '../../services/api';
 import { RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigation/native-stack';
@@ -28,15 +26,14 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
   const [isLoading, setIsLoading] = useState(false);
   const [roomTypeVal, setRoomTypeVal] = useState('2 Share');
 
-  const { control, handleSubmit, setValue, formState: { errors } } = useForm({
-    resolver: zodResolver(roomFormSchema),
+  const { control, handleSubmit, setValue } = useForm({
     defaultValues: {
       roomNumber: '',
       floor: '',
       roomType: '2 Share',
-      capacity: 2,
-      monthlyRent: 5000,
-      admissionFee: 1500,
+      capacity: '2',
+      monthlyRent: '5000',
+      admissionFee: '1500',
     },
   });
 
@@ -45,10 +42,10 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
     setRoomTypeVal(type);
     setValue('roomType', type);
 
-    if (type === '2 Share') setValue('capacity', 2);
-    else if (type === '3 Share') setValue('capacity', 3);
-    else if (type === '4 Share') setValue('capacity', 4);
-    else if (type === '5 Share') setValue('capacity', 5);
+    if (type === '2 Share') setValue('capacity', '2');
+    else if (type === '3 Share') setValue('capacity', '3');
+    else if (type === '4 Share') setValue('capacity', '4');
+    else if (type === '5 Share') setValue('capacity', '5');
   };
 
   // Load existing data if editing
@@ -61,9 +58,9 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
           setValue('roomNumber', data.roomNumber);
           setValue('floor', data.floor);
           setValue('roomType', data.roomType);
-          setValue('capacity', data.capacity);
-          setValue('monthlyRent', data.monthlyRent);
-          setValue('admissionFee', data.admissionFee);
+          setValue('capacity', String(data.capacity));
+          setValue('monthlyRent', String(data.monthlyRent));
+          setValue('admissionFee', String(data.admissionFee));
           setRoomTypeVal(data.roomType);
         })
         .catch((err) => {
@@ -82,6 +79,9 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
       ...data,
       branchId,
       roomType: roomTypeVal,
+      capacity: Number(data.capacity),
+      monthlyRent: Number(data.monthlyRent),
+      admissionFee: Number(data.admissionFee),
     };
 
     try {
@@ -134,12 +134,10 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
                 onBlur={onBlur}
                 onChangeText={onChange}
                 mode="outlined"
-                error={!!errors.roomNumber}
                 style={styles.input}
               />
             )}
           />
-          {errors.roomNumber && <HelperText type="error">{errors.roomNumber.message}</HelperText>}
 
           <Controller
             control={control}
@@ -152,12 +150,10 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
                 onChangeText={onChange}
                 mode="outlined"
                 placeholder="e.g. Ground Floor, 1st Floor"
-                error={!!errors.floor}
                 style={styles.input}
               />
             )}
           />
-          {errors.floor && <HelperText type="error">{errors.floor.message}</HelperText>}
 
           {/* Sharing Select Segment */}
           <Text variant="labelMedium" style={styles.sectionLabel}>How many people can share this room? *</Text>
@@ -183,12 +179,11 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
               render={({ field: { onChange, onBlur, value } }) => (
                 <TextInput
                   label="Number of beds *"
-                  value={String(value)}
+                  value={value}
                   onBlur={onBlur}
-                  onChangeText={(text) => onChange(Number(text) || 1)}
+                  onChangeText={onChange}
                   mode="outlined"
                   keyboardType="numeric"
-                  error={!!errors.capacity}
                   style={styles.input}
                 />
               )}
@@ -201,17 +196,15 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Monthly Rent (₹) *"
-                value={String(value)}
+                value={value}
                 onBlur={onBlur}
-                onChangeText={(text) => onChange(Number(text) || 0)}
+                onChangeText={onChange}
                 mode="outlined"
                 keyboardType="numeric"
-                error={!!errors.monthlyRent}
                 style={styles.input}
               />
             )}
           />
-          {errors.monthlyRent && <HelperText type="error">{errors.monthlyRent.message}</HelperText>}
 
           <Controller
             control={control}
@@ -219,17 +212,15 @@ export default function RoomFormScreen({ route, navigation }: RoomFormScreenProp
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="One-Time Admission Fee (₹) *"
-                value={String(value)}
+                value={value}
                 onBlur={onBlur}
-                onChangeText={(text) => onChange(Number(text) || 0)}
+                onChangeText={onChange}
                 mode="outlined"
                 keyboardType="numeric"
-                error={!!errors.admissionFee}
                 style={styles.input}
               />
             )}
           />
-          {errors.admissionFee && <HelperText type="error">{errors.admissionFee.message}</HelperText>}
 
           <Button
             mode="contained"
