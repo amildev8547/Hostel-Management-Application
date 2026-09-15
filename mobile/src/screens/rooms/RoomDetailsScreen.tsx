@@ -11,6 +11,7 @@ import { occupancyColors, occupancyLabels } from '../../theme';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 import ManualRefreshControl from '../../components/ManualRefreshControl';
+import { formatRoomType } from '../../utils/roomType';
 
 type RoomDetailsRouteProp = RouteProp<RootStackParamList, 'RoomDetails'>;
 type RoomDetailsNavigationProp = StackNavigationProp<RootStackParamList, 'RoomDetails'>;
@@ -96,7 +97,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
         <View style={styles.roomSpecs}>
           <View style={styles.specCell}>
             <Text variant="bodySmall" style={styles.specLabel}>Room type</Text>
-            <Text variant="titleMedium" style={styles.specVal}>{String(room.roomType).replace('Share', 'people')}</Text>
+            <Text variant="titleMedium" style={styles.specVal}>{formatRoomType(room.roomType, room.capacity, true)}</Text>
           </View>
           <View style={styles.specCell}>
             <Text variant="bodySmall" style={styles.specLabel}>Beds in use</Text>

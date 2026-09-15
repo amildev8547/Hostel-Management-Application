@@ -9,6 +9,7 @@ import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert } from '../../utils/alerts';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
+import { formatRoomType } from '../../utils/roomType';
 
 type MoveTenantRouteProp = RouteProp<RootStackParamList, 'MoveTenant'>;
 type MoveTenantNavigationProp = StackNavigationProp<RootStackParamList, 'MoveTenant'>;
@@ -97,7 +98,7 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
             {tenant.name}
           </Text>
           <Text variant="bodyMedium" style={{ color: '#64748B', marginTop: 2 }}>
-            {readmit ? 'Previous room' : 'Current room'}: {tenant.room.roomNumber} ({String(tenant.room.roomType).replace('Share', 'people')})
+            {readmit ? 'Previous room' : 'Current room'}: {tenant.room.roomNumber} ({formatRoomType(tenant.room.roomType, tenant.room.capacity, true)})
           </Text>
         </Surface>
 
@@ -114,7 +115,7 @@ export default function MoveTenantScreen({ route, navigation }: MoveTenantScreen
                     <View style={{ marginLeft: 8 }}>
                       <Text style={{ fontWeight: '700', fontSize: 15 }}>Room {room.roomNumber}</Text>
                       <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                        {room.floor} • {room.roomType}
+                        {room.floor} • {formatRoomType(room.roomType, room.capacity)}
                       </Text>
                     </View>
                   </View>

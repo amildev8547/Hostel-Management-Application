@@ -12,6 +12,7 @@ import { showAlert, showConfirm } from '../../utils/alerts';
 import { getApplyUrl } from '../../utils/backendUrl';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 import ManualRefreshControl from '../../components/ManualRefreshControl';
+import { formatRoomType } from '../../utils/roomType';
 
 type BranchDashboardRouteProp = RouteProp<RootStackParamList, 'BranchDashboard'>;
 type BranchDashboardNavigationProp = StackNavigationProp<RootStackParamList, 'BranchDashboard'>;
@@ -217,7 +218,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.roomStatusRow, styles.lastRoomStatus]} onPress={() => showRooms('FULL')} accessibilityRole="button">
                   <View style={[styles.roomStatusIcon, { backgroundColor: '#FEF2F2' }]}><Icon name="door-closed" size={20} color="#DC2626" /></View>
-                  <Text style={styles.roomStatusLabel}>Full rooms</Text>
+                  <Text style={styles.roomStatusLabel}>Rooms Full</Text>
                   <Text style={styles.roomStatusCount}>{metrics.occupiedRooms}</Text>
                   <Icon name="chevron-right" size={20} color="#94A3B8" />
                 </TouchableOpacity>
@@ -312,7 +313,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
                             Room {room.roomNumber}
                           </Text>
                           <Text variant="bodySmall" style={{ color: '#64748B' }}>
-                            {room.floor} • {room.roomType}
+                            {room.floor} • {formatRoomType(room.roomType, room.capacity)}
                           </Text>
                         </View>
                       </View>

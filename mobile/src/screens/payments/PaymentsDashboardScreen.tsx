@@ -11,6 +11,7 @@ import { showAlert } from '../../utils/alerts';
 import { getBackendBaseUrl } from '../../utils/backendUrl';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 import ManualRefreshControl from '../../components/ManualRefreshControl';
+import { formatRoomType } from '../../utils/roomType';
 
 type PaymentsDashboardRouteProp = RouteProp<RootStackParamList, 'PaymentsDashboard'>;
 type PaymentsDashboardNavigationProp = StackNavigationProp<RootStackParamList, 'PaymentsDashboard'>;
@@ -334,7 +335,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
               const name = pay.tenant?.name || pay.admissionApplication?.name || 'Applicant';
               const phone = pay.tenant?.phone || pay.admissionApplication?.phone || 'N/A';
               const roomDetails = pay.tenant?.room
-                ? `Room ${pay.tenant.room.roomNumber} (${pay.tenant.room.roomType})`
+                ? `Room ${pay.tenant.room.roomNumber} (${formatRoomType(pay.tenant.room.roomType, pay.tenant.room.capacity)})`
                 : `${pay.paymentType} Pre-Allocation`;
 
               return (
