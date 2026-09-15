@@ -29,6 +29,7 @@ import PaymentsDashboardScreen from '../screens/payments/PaymentsDashboardScreen
 import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import BookingListScreen from '../screens/bookings/BookingListScreen';
 import BookingFormScreen from '../screens/bookings/BookingFormScreen';
+import ExistingTenantFormScreen from '../screens/tenants/ExistingTenantFormScreen';
 
 // Stack Navigation Type Definitions
 export type RootStackParamList = {
@@ -46,6 +47,7 @@ export type RootStackParamList = {
   Settings: undefined;
   BookingList: undefined;
   BookingForm: { branchId?: string } | undefined;
+  ExistingTenantForm: { branchId: string };
 };
 
 export type TabParamList = {
@@ -201,6 +203,7 @@ export default function AppNavigator() {
         <RootStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
         <RootStack.Screen name="BookingList" component={BookingListScreen} options={{ title: 'Bed Bookings' }} />
         <RootStack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Book a Bed' }} />
+        <RootStack.Screen name="ExistingTenantForm" component={ExistingTenantFormScreen} options={{ title: 'Add Current Resident' }} />
       </RootStack.Navigator>
     </NavigationContainer>
   );

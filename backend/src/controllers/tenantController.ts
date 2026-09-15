@@ -4,6 +4,82 @@ import prisma from '../config/db';
 import { updateRoomOccupancyStatus } from '../utils/occupancy';
 import { ensureCurrentMonthRentInvoice } from '../utils/rentBilling';
 import { createOwnerNotification } from '../services/notifications';
+import { deleteUploadedFile } from '../services/cloudinary';
+
+export async function createExistingTenant(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const {
+    branchId, roomId, name, phone, whatsappNumber, joiningDate, address = '',
+    guardianName = '', guardianPhone = '', nearestPoliceStation = '', occupation = '',
+    workLocation = '', joiningFeeStatus = 'SKIP', currentRentStatus = 'DUE',
+  } = req.body;
+
+  try {
+    const room = await prisma.room.findUnique({
+      where: { id: roomId },
+      include: { branch: true, tenants: { where: { status: 'ACTIVE' } }, bookings: true },
+    });
+    if (!room || room.branchId !== branchId || room.branch.userId !== userId) {
+      return res.status(404).json({ error: 'Selected room was not found in this hostel.' });
+    }
+    const reservedBeds = room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
+    if (room.tenants.length + reservedBeds >= room.capacity) {
+      return res.status(400).json({ error: 'The selected room does not have a free bed.' });
+    }
+
+    const duplicate = await prisma.tenant.findFirst({
+      where: { phone, status: 'ACTIVE', room: { branchId } },
+    });
+    if (duplicate) return res.status(409).json({ error: 'An active resident with this phone number already exists in this hostel.' });
+
+    const joinedOn = new Date(joiningDate);
+    if (joinedOn > new Date()) return res.status(400).json({ error: 'The joining date cannot be in the future.' });
+
+    const tenant = await prisma.tenant.create({
+      data: {
+        name, phone, whatsappNumber: whatsappNumber || phone, address, guardianName,
+        guardianPhone, nearestPoliceStation, occupation, workLocation, joiningDate: joinedOn,
+        status: 'ACTIVE', roomId,
+      },
+    });
+
+    try {
+      const now = new Date();
+      if (joiningFeeStatus === 'PAID') {
+        await prisma.payment.create({ data: {
+          amount: room.admissionFee, status: 'PAID', paymentType: 'ADMISSION', dueDate: joinedOn,
+          paidDate: joinedOn, transactionId: `EXISTING-${tenant.id}`,
+          tenantId: tenant.id, branchId,
+        } });
+      }
+      if (currentRentStatus !== 'SKIP') {
+        const result = await ensureCurrentMonthRentInvoice({
+          tenantId: tenant.id, branchId, monthlyRent: room.monthlyRent, joiningDate: joinedOn, now,
+        });
+        if (currentRentStatus === 'PAID') {
+          await prisma.payment.update({ where: { id: result.payment.id }, data: {
+            status: 'PAID', paidDate: now, transactionId: `OPENING-${tenant.id}`,
+          } });
+        }
+      }
+      await updateRoomOccupancyStatus(roomId);
+      await createOwnerNotification({
+        title: 'Existing Resident Added', message: `${name} was added to Room ${room.roomNumber}.`,
+        type: 'ADMISSION_APPROVED', userId, branchId, tenantId: tenant.id,
+      });
+    } catch (setupError) {
+      await prisma.tenant.delete({ where: { id: tenant.id } }).catch(() => undefined);
+      throw setupError;
+    }
+
+    res.status(201).json({ message: `${name} was added as a current resident.`, tenant });
+  } catch (error) {
+    console.error('Create existing tenant error:', error);
+    res.status(500).json({ error: 'Failed to add the existing resident.' });
+  }
+}
 
 export async function getTenants(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
@@ -358,7 +434,7 @@ export async function deleteTenant(req: AuthenticatedRequest, res: Response) {
   try {
     const tenant = await prisma.tenant.findUnique({
       where: { id },
-      include: { room: { include: { branch: true } } },
+      include: { room: { include: { branch: true } }, documents: true },
     });
 
     if (!tenant || tenant.room.branch.userId !== userId) {
@@ -366,13 +442,44 @@ export async function deleteTenant(req: AuthenticatedRequest, res: Response) {
     }
 
     const roomId = tenant.roomId;
+    const branchId = tenant.room.branchId;
+    const relatedApplications = await prisma.admissionApplication.findMany({
+      where: { branchId, phone: tenant.phone },
+      include: { documents: true },
+    });
+    const applicationIds = relatedApplications.map((application) => application.id);
+    const uploadedDocuments = [
+      ...tenant.documents,
+      ...relatedApplications.flatMap((application) => application.documents),
+    ];
+
+    await prisma.notification.deleteMany({
+      where: {
+        userId,
+        OR: [
+          { tenantId: id },
+          ...(applicationIds.length ? [{ applicationId: { in: applicationIds } }] : []),
+        ],
+      },
+    });
+    await prisma.admissionSubmissionGuard.deleteMany({ where: { branchId, phone: tenant.phone } });
     await prisma.booking.deleteMany({ where: { tenantId: id } });
     await prisma.tenant.delete({ where: { id } });
+    if (applicationIds.length) {
+      await prisma.admissionApplication.deleteMany({ where: { id: { in: applicationIds } } });
+    }
 
     // Recalculate room occupancy status
     await updateRoomOccupancyStatus(roomId);
 
-    res.json({ message: 'Tenant deleted successfully' });
+    const cleanupResults = await Promise.allSettled(
+      uploadedDocuments.map((document) => deleteUploadedFile(document.s3Key, document.s3Bucket)),
+    );
+    for (const result of cleanupResults) {
+      if (result.status === 'rejected') console.error('Resident document cleanup error:', result.reason);
+    }
+
+    res.json({ message: 'Resident and all related records deleted successfully' });
   } catch (error) {
     console.error('Delete tenant error:', error);
     res.status(500).json({ error: 'Failed to delete tenant' });

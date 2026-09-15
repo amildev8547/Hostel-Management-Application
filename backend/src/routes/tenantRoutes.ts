@@ -8,15 +8,17 @@ import {
   deleteTenant,
   createCustomRentInvoice,
   readmitTenant,
+  createExistingTenant,
 } from '../controllers/tenantController';
 import { authenticateJWT } from '../middlewares/auth';
-import { validate, tenantEditSchema, customRentSchema } from '../middlewares/validation';
+import { validate, tenantEditSchema, customRentSchema, existingTenantSchema } from '../middlewares/validation';
 
 const router = Router();
 
 router.use(authenticateJWT);
 
 router.get('/', getTenants);
+router.post('/existing', validate(existingTenantSchema), createExistingTenant);
 router.get('/:id', getTenantById);
 router.put('/:id', validate(tenantEditSchema), updateTenant);
 router.post('/:id/move', moveTenant);

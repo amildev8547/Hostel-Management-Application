@@ -87,7 +87,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
 
   const handleDeleteApplication = () => {
     showConfirm(
-      `Delete ${application.name}’s application? Its joining-fee record and uploaded document records will also be removed. If this came from an advance booking, the reservation and secure link will stay active for a corrected submission.`,
+      `Delete ${application.name}’s application? Its joining-fee record, uploaded documents, notifications, and any linked bed booking will also be removed.`,
       async () => {
         setIsProcessing(true);
         try {

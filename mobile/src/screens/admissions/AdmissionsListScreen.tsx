@@ -40,7 +40,7 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
 
   const deleteApplication = (application: any) => {
     showConfirm(
-      `Delete ${application.name}’s application? Its fee and document records will be removed. Any linked advance booking will stay reserved so they can correct and resubmit the form.`,
+      `Delete ${application.name}’s application? Its fee, documents, notifications, and any linked bed booking will also be removed.`,
       async () => {
         setDeletingId(application.id);
         try {

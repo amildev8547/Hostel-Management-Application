@@ -160,3 +160,22 @@ export const tenantEditSchema = z.object({
     status: z.enum(['ACTIVE', 'VACATED']).optional(),
   }),
 });
+
+export const existingTenantSchema = z.object({
+  body: z.object({
+    branchId: z.string().min(1, 'Hostel branch is required'),
+    roomId: z.string().min(1, 'Room is required'),
+    name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
+    phone: z.string().regex(/^\d{10}$/, 'Phone must be exactly 10 digits'),
+    whatsappNumber: z.string().regex(/^\d{10}$/, 'WhatsApp number must be exactly 10 digits').optional(),
+    joiningDate: z.string().refine(isValidDateString, { message: 'Choose a valid joining date' }),
+    address: z.string().trim().max(1000).optional(),
+    guardianName: z.string().trim().max(100).optional(),
+    guardianPhone: z.string().regex(/^\d{10}$/, 'Guardian phone must be exactly 10 digits').optional(),
+    nearestPoliceStation: z.string().trim().max(200).optional(),
+    occupation: z.string().trim().max(200).optional(),
+    workLocation: z.string().trim().max(300).optional(),
+    joiningFeeStatus: z.enum(['PAID', 'SKIP']).default('SKIP'),
+    currentRentStatus: z.enum(['PAID', 'DUE', 'SKIP']).default('DUE'),
+  }),
+});

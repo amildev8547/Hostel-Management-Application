@@ -287,7 +287,46 @@ export async function getAdmissionApplications(req: AuthenticatedRequest, res: R
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json(applications);
+    // Older app versions could leave an approved admission behind after its resident
+    // was permanently deleted. Remove those orphaned records so the person does not
+    // remain in Accepted or Notifications. Active and vacated residents both count as
+    // existing records and keep their admission history.
+    const approved = applications.filter((application) => application.status === 'APPROVED');
+    if (!approved.length) return res.json(applications);
+
+    const residents = await prisma.tenant.findMany({
+      where: {
+        room: { branch: { userId } },
+        OR: approved.map((application) => ({
+          phone: application.phone,
+          room: { branchId: application.branchId },
+        })),
+      },
+      select: { phone: true, room: { select: { branchId: true } } },
+    });
+    const residentKeys = new Set(residents.map((resident) => `${resident.room.branchId}:${resident.phone}`));
+    const orphanIds = approved
+      .filter((application) => !residentKeys.has(`${application.branchId}:${application.phone}`))
+      .map((application) => application.id);
+
+    if (orphanIds.length) {
+      const orphanApplications = approved.filter((application) => orphanIds.includes(application.id));
+      const orphanDocuments = await prisma.document.findMany({
+        where: { admissionApplicationId: { in: orphanIds } },
+      });
+      await prisma.notification.deleteMany({ where: { userId, applicationId: { in: orphanIds } } });
+      await prisma.admissionApplication.deleteMany({ where: { id: { in: orphanIds } } });
+      await Promise.all(orphanApplications.map((application) => prisma.admissionSubmissionGuard.deleteMany({
+        where: { branchId: application.branchId, phone: application.phone },
+      })));
+      void Promise.allSettled(
+        orphanDocuments.map((document) => deleteUploadedFile(document.s3Key, document.s3Bucket)),
+      ).then((results) => results.forEach((result) => {
+        if (result.status === 'rejected') console.error('Orphan admission document cleanup error:', result.reason);
+      }));
+    }
+
+    res.json(applications.filter((application) => !orphanIds.includes(application.id)));
   } catch (error) {
     console.error('Get admission applications error:', error);
     res.status(500).json({ error: 'Failed to retrieve admission applications' });
@@ -429,10 +468,7 @@ export async function deleteAdmissionApplication(req: AuthenticatedRequest, res:
     const bookedRoomId = application.booking?.roomId;
     await prisma.notification.deleteMany({ where: { userId, applicationId: id } });
     if (application.booking) {
-      await prisma.booking.update({
-        where: { id: application.booking.id },
-        data: { status: 'RESERVED', admissionApplicationId: null },
-      });
+      await prisma.booking.delete({ where: { id: application.booking.id } });
     }
     await prisma.admissionApplication.delete({ where: { id } });
     const remainingApplication = await prisma.admissionApplication.findFirst({
@@ -461,9 +497,7 @@ export async function deleteAdmissionApplication(req: AuthenticatedRequest, res:
     }
 
     res.json({
-      message: application.booking
-        ? 'Admission application deleted. The reserved place and its secure form link are ready for a corrected submission.'
-        : 'Admission application deleted. This phone number can submit a fresh form.',
+      message: 'Admission application and all related records were deleted. This phone number can submit a fresh form.',
     });
   } catch (error) {
     console.error('Delete admission application error:', error);

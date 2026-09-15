@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Button, Card, Text, TextInput, useTheme } from 'react-native-paper';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RouteProp } from '@react-navigation/native';
@@ -9,6 +8,7 @@ import { NativeStackNavigationProp as StackNavigationProp } from '@react-navigat
 import { RootStackParamList } from '../../navigation';
 import apiClient from '../../services/api';
 import { showAlert } from '../../utils/alerts';
+import DateInputField from '../../components/DateInputField';
 
 type Props = { route: RouteProp<RootStackParamList, 'BookingForm'>; navigation: StackNavigationProp<RootStackParamList, 'BookingForm'> };
 const tomorrow = () => { const date = new Date(); date.setDate(date.getDate() + 1); date.setHours(12, 0, 0, 0); return date; };
@@ -18,7 +18,7 @@ export default function BookingFormScreen({ route, navigation }: Props) {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [name, setName] = useState(''); const [phone, setPhone] = useState(''); const [branchId, setBranchId] = useState(route.params?.branchId || '');
-  const [roomId, setRoomId] = useState(''); const [joiningDate, setJoiningDate] = useState(tomorrow()); const [showCalendar, setShowCalendar] = useState(false); const [notes, setNotes] = useState(''); const [saving, setSaving] = useState(false);
+  const [roomId, setRoomId] = useState(''); const [joiningDate, setJoiningDate] = useState(tomorrow()); const [notes, setNotes] = useState(''); const [saving, setSaving] = useState(false);
   const { data: branches = [] } = useQuery<any[]>({ queryKey: ['branchesList', 'booking'], queryFn: async () => (await apiClient.get('/branches')).data });
   const { data: rooms = [] } = useQuery<any[]>({ queryKey: ['branchRooms', branchId], queryFn: async () => (await apiClient.get('/rooms', { params: { branchId } })).data, enabled: !!branchId });
   useEffect(() => { setRoomId(''); }, [branchId]);
@@ -43,11 +43,6 @@ export default function BookingFormScreen({ route, navigation }: Props) {
     } finally { setSaving(false); }
   };
 
-  const handleDateChange = (_event: unknown, selectedDate: Date) => {
-    if (Platform.OS === 'android') setShowCalendar(false);
-    setJoiningDate(selectedDate);
-  };
-
   return <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <View style={styles.info}><Text style={styles.title}>Book a bed</Text><Text style={styles.help}>Only basic information is needed now. The person can complete the remaining details later.</Text></View>
     <Card style={styles.card}><Card.Content>
@@ -58,12 +53,7 @@ export default function BookingFormScreen({ route, navigation }: Props) {
       {!!branchId && <><Text style={styles.section}>2. Choose room</Text>{rooms.filter((room) => room.vacant > 0).map((room) => <Choice key={room.id} selected={roomId === room.id} label={`Room ${room.roomNumber}`} detail={`${room.vacant} free ${room.vacant === 1 ? 'bed' : 'beds'} · ${room.floor}`} onPress={() => setRoomId(room.id)} />)}{rooms.length > 0 && !rooms.some((room) => room.vacant > 0) && <Text style={styles.emptyText}>No rooms have a free bed.</Text>}</>}
       {!!roomId && <View style={styles.autoBedInfo}><Icon name="bed-outline" size={24} color="#047857" /><Text style={styles.autoBedText}>An available bed in Room {selectedRoom?.roomNumber} will be selected automatically.</Text></View>}
       <Text style={styles.section}>3. Expected joining date</Text>
-      <TouchableOpacity style={styles.dateField} onPress={() => setShowCalendar(true)} accessibilityRole="button" accessibilityLabel="Choose expected joining date">
-        <Icon name="calendar-month-outline" size={26} color="#4F46E5" />
-        <View style={{ flex: 1 }}><Text style={styles.dateLabel}>Expected joining date</Text><Text style={styles.dateValue}>{joiningDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</Text></View>
-        <Icon name="chevron-down" size={24} color="#64748B" />
-      </TouchableOpacity>
-      {showCalendar && <DateTimePicker value={joiningDate} mode="date" display={Platform.OS === 'ios' ? 'inline' : 'calendar'} minimumDate={new Date()} onValueChange={handleDateChange} onDismiss={() => setShowCalendar(false)} />}
+      <DateInputField value={joiningDate} onChange={setJoiningDate} label="Expected joining date" minimumDate={new Date()} />
       <TextInput mode="outlined" label="Notes (optional)" value={notes} onChangeText={setNotes} multiline numberOfLines={3} style={styles.input} />
       <Button mode="contained" icon="bed" onPress={save} loading={saving} disabled={saving} style={styles.save}>Reserve this bed</Button>
     </Card.Content></Card>
