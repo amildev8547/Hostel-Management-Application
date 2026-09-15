@@ -11,6 +11,7 @@ import { showAlert } from '../../utils/alerts';
 import { getBackendBaseUrl } from '../../utils/backendUrl';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 import ManualRefreshControl from '../../components/ManualRefreshControl';
+import { formatDate } from '../../utils/date';
 import { formatRoomType } from '../../utils/roomType';
 
 type PaymentsDashboardRouteProp = RouteProp<RootStackParamList, 'PaymentsDashboard'>;
@@ -118,7 +119,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
       ``,
       `💰 *Amount Paid: ₹${pay.amount}*`,
       `🧾 Payment Method: ${methodLabel}`,
-      `📅 Date: ${new Date().toLocaleDateString('en-IN')}`,
+      `📅 Date: ${formatDate(new Date())}`,
       ``,
       `Thank you for your payment!`,
       `— HostelHub`,
@@ -219,7 +220,7 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
         `Your advance rent for *${formatRentMonth(payment.dueDate)}* at *${branchName}*${roomInfo ? ` (${roomInfo})` : ''} is ready.`,
         ``,
         `💰 *Amount: ₹${payment.amount}*`,
-        `📅 Due Date: ${new Date(payment.dueDate).toLocaleDateString('en-IN')}`,
+        `📅 Due Date: ${formatDate(payment.dueDate)}`,
         ``,
         upiPaymentUrl ? `Tap this UPI link to pay:` : `Please pay through UPI using this page:`,
         upiPaymentUrl || manualPaymentUrl,
@@ -367,11 +368,11 @@ export default function PaymentsDashboardScreen({ route, navigation }: PaymentsD
                     <View style={styles.payBody}>
                       <View>
                         <Text variant="bodySmall" style={{ color: '#64748B' }}>
-                          Pay by: {new Date(pay.dueDate).toLocaleDateString()}
+                          Pay by: {formatDate(pay.dueDate)}
                         </Text>
                         {pay.paidDate && (
                           <Text variant="bodySmall" style={{ color: (theme.colors as any).success, fontWeight: '600', marginTop: 2 }}>
-                            Paid on: {new Date(pay.paidDate).toLocaleDateString()} via {pay.paymentMethod}
+                            Paid on: {formatDate(pay.paidDate)} via {pay.paymentMethod}
                           </Text>
                         )}
                       </View>

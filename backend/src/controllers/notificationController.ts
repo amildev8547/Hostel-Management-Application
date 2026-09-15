@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
+import { formatDate } from '../utils/date';
 
 const DISMISSED_ALERTS_KEY = 'dismissed_notification_alert_ids';
 
@@ -87,7 +88,7 @@ async function getLiveAlerts(userId: string) {
     id: `alert-overdue-${p.id}`,
     type: 'RENT_OVERDUE',
     title: 'Rent Overdue',
-    message: `${p.tenant?.name || 'Tenant'} (Room ${p.tenant?.room?.roomNumber}, ${p.branch.name}) has an overdue rent of ₹${p.amount}, due ${p.dueDate.toLocaleDateString('en-IN')}.`,
+    message: `${p.tenant?.name || 'Tenant'} (Room ${p.tenant?.room?.roomNumber}, ${p.branch.name}) has an overdue rent of ₹${p.amount}, due ${formatDate(p.dueDate)}.`,
     isRead: false,
     isLive: true,
     createdAt: p.dueDate,

@@ -10,6 +10,7 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 import ManualRefreshControl from '../../components/ManualRefreshControl';
+import { formatDate } from '../../utils/date';
 
 type AdmissionReviewRouteProp = RouteProp<RootStackParamList, 'AdmissionReview'>;
 type AdmissionReviewNavigationProp = StackNavigationProp<RootStackParamList, 'AdmissionReview'>;
@@ -311,7 +312,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Plans to move in on</Text>
-              <Text style={styles.detailVal}>{new Date(application.joiningDate).toLocaleDateString()}</Text>
+              <Text style={styles.detailVal}>{formatDate(application.joiningDate)}</Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Nearest Police Station</Text>

@@ -3,6 +3,7 @@ import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { Text } from 'react-native-paper';
+import { formatDate } from '../utils/date';
 
 type Props = {
   value: Date;
@@ -36,7 +37,7 @@ export default function DateInputField({ value, onChange, label, minimumDate, ma
     });
     return <View style={styles.field}>
       <Icon name="calendar-month-outline" size={25} color="#4F46E5" />
-      <View style={styles.webInput}>{input}</View>
+      <View style={styles.webInput}><Text style={styles.value}>{formatDate(value)}</Text><View style={styles.hiddenWebInput}>{input}</View></View>
     </View>;
   }
 
@@ -45,7 +46,7 @@ export default function DateInputField({ value, onChange, label, minimumDate, ma
       <Icon name="calendar-month-outline" size={25} color="#4F46E5" />
       <View style={styles.valueWrap}>
         {!!label && <Text style={styles.smallLabel}>{label}</Text>}
-        <Text style={styles.value}>{value.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+        <Text style={styles.value}>{formatDate(value)}</Text>
       </View>
       <Icon name="chevron-down" size={23} color="#64748B" />
     </TouchableOpacity>
@@ -64,5 +65,5 @@ export default function DateInputField({ value, onChange, label, minimumDate, ma
 const styles = StyleSheet.create({
   field: { minHeight: 62, flexDirection: 'row', gap: 12, alignItems: 'center', borderWidth: 1, borderColor: '#94A3B8', borderRadius: 12, paddingHorizontal: 14, marginBottom: 10, backgroundColor: '#FFFFFF' },
   valueWrap: { flex: 1 }, value: { color: '#0F172A', fontSize: 16, fontWeight: '700' },
-  smallLabel: { color: '#64748B', fontSize: 12, marginBottom: 2 }, webInput: { flex: 1, justifyContent: 'center' },
+  smallLabel: { color: '#64748B', fontSize: 12, marginBottom: 2 }, webInput: { flex: 1, justifyContent: 'center', position: 'relative' }, hiddenWebInput: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: 0 },
 });

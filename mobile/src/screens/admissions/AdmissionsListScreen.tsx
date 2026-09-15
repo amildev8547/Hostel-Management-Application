@@ -9,6 +9,7 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 import ManualRefreshControl from '../../components/ManualRefreshControl';
+import { formatDate } from '../../utils/date';
 
 type AdmissionsListScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -40,7 +41,9 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
 
   const deleteApplication = (application: any) => {
     showConfirm(
-      `Delete ${application.name}’s application? Its fee, documents, notifications, and any linked bed booking will also be removed.`,
+      application.status === 'APPROVED'
+        ? `Permanently delete ${application.name}? Their accepted admission, resident profile, payments, documents, notifications, and room allocation will all be removed.`
+        : `Delete ${application.name}’s application? Its fee, documents, notifications, and any linked bed booking will also be removed.`,
       async () => {
         setDeletingId(application.id);
         try {
@@ -77,7 +80,7 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
                 🏠 {item.branch?.name || 'Branch not available'} • {item.preferredRoomType || 'Room type not selected'}
               </Text>
               <Text variant="bodySmall" style={{ color: '#94A3B8', marginTop: 4 }}>
-                Join Date: {new Date(item.joiningDate).toLocaleDateString()}
+                Join Date: {formatDate(item.joiningDate)}
               </Text>
             </View>
           </View>
@@ -103,17 +106,15 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
               </Text>
             </View>
             <View style={styles.cardActions}>
-              {item.status !== 'APPROVED' && (
-                <IconButton
-                  icon="delete-outline"
-                  iconColor={theme.colors.error}
-                  size={21}
-                  disabled={deletingId === item.id}
-                  loading={deletingId === item.id}
-                  accessibilityLabel={`Delete ${item.name}'s application`}
-                  onPress={() => deleteApplication(item)}
-                />
-              )}
+              <IconButton
+                icon="delete-outline"
+                iconColor={theme.colors.error}
+                size={21}
+                disabled={deletingId === item.id}
+                loading={deletingId === item.id}
+                accessibilityLabel={`Delete ${item.name}'s application`}
+                onPress={() => deleteApplication(item)}
+              />
               <Icon name="chevron-right" size={24} color="#94A3B8" />
             </View>
           </View>

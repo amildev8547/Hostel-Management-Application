@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import prisma from '../config/db';
 import { issueAdmissionFormToken } from '../services/admissionFormSecurity';
+import { formatDate } from '../utils/date';
 
 const router = Router();
 
@@ -994,7 +995,7 @@ router.get('/pay/:paymentId', async (req: Request, res: Response) => {
             </div>
             <div class="detail-row">
               <span class="label">Due Date</span>
-              <span class="val">${escapeHtml(payment.dueDate.toDateString())}</span>
+              <span class="val">${escapeHtml(formatDate(payment.dueDate))}</span>
             </div>
 
             ${upiId

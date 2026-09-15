@@ -11,6 +11,7 @@ import { showAlert, showConfirm } from '../../utils/alerts';
 import { getBackendBaseUrl } from '../../utils/backendUrl';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 import ManualRefreshControl from '../../components/ManualRefreshControl';
+import { formatDate } from '../../utils/date';
 
 type TenantProfileRouteProp = RouteProp<RootStackParamList, 'TenantProfile'>;
 type TenantProfileNavigationProp = StackNavigationProp<RootStackParamList, 'TenantProfile'>;
@@ -184,7 +185,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
         `Your advance rent for *${formatRentMonth(pay.dueDate)}* at *${branchName}*${roomInfo ? ` (${roomInfo})` : ''} is ready.`,
         ``,
         `💰 *Amount: ₹${pay.amount}*`,
-        `📅 Due Date: ${new Date(pay.dueDate).toLocaleDateString('en-IN')}`,
+        `📅 Due Date: ${formatDate(pay.dueDate)}`,
         ``,
         upiPaymentUrl ? `Tap this UPI link to pay:` : `Please pay through UPI using this page:`,
         upiPaymentUrl || manualPaymentUrl,
@@ -329,7 +330,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
               </View>
             </View>
             <Text variant="bodySmall" style={{ color: '#64748B', marginTop: 6, fontWeight: '500' }}>
-              Moved in: {new Date(tenant.joiningDate).toLocaleDateString()}
+              Moved in: {formatDate(tenant.joiningDate)}
             </Text>
           </View>
         </View>
@@ -456,7 +457,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
                       </Text>
                     )}
                     <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
-                      Due: {new Date(pay.dueDate).toLocaleDateString()}
+                      Due: {formatDate(pay.dueDate)}
                     </Text>
                     {!!pay.daysBilled && (
                       <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
@@ -483,7 +484,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
                     </Text>
                     {pay.paidDate && (
                       <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
-                        {new Date(pay.paidDate).toLocaleDateString()}
+                        {formatDate(pay.paidDate)}
                       </Text>
                     )}
                   </View>

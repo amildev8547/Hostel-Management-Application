@@ -10,6 +10,7 @@ import { getBackendBaseUrl } from '../../utils/backendUrl';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import ManualRefreshControl from '../../components/ManualRefreshControl';
+import { formatDate } from '../../utils/date';
 
 type Props = { navigation: StackNavigationProp<RootStackParamList, 'BookingList'> };
 
@@ -102,7 +103,7 @@ export default function BookingListScreen({ navigation }: Props) {
                 <View style={styles.placeBox}>
                   <Text style={styles.placeText}>{item.branch.name}</Text>
                   <Text style={styles.placeText}>Room {item.room.roomNumber} · Bed {item.bedNumber}</Text>
-                  <Text style={styles.joinText}>Expected: {new Date(item.expectedJoiningDate).toLocaleDateString('en-IN')}</Text>
+                  <Text style={styles.joinText}>Expected: {formatDate(item.expectedJoiningDate)}</Text>
                 </View>
                 {!!item.notes && <Text style={styles.notes}>Note: {item.notes}</Text>}
                 {item.status !== 'OCCUPIED' && (

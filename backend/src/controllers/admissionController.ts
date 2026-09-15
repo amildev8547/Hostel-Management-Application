@@ -461,15 +461,34 @@ export async function deleteAdmissionApplication(req: AuthenticatedRequest, res:
     if (!application || application.branch.userId !== userId) {
       return res.status(404).json({ error: 'Application not found' });
     }
-    if (application.status === 'APPROVED') {
-      return res.status(400).json({ error: 'An approved application cannot be deleted here. Use the resident record instead.' });
-    }
-
-    const bookedRoomId = application.booking?.roomId;
-    await prisma.notification.deleteMany({ where: { userId, applicationId: id } });
-    if (application.booking) {
-      await prisma.booking.delete({ where: { id: application.booking.id } });
-    }
+    const linkedTenant = application.status === 'APPROVED'
+      ? await prisma.tenant.findFirst({
+          where: { phone: application.phone, room: { branchId: application.branchId } },
+          include: { documents: true },
+        })
+      : null;
+    const affectedRoomIds = [...new Set([
+      application.booking?.roomId,
+      linkedTenant?.roomId,
+    ].filter((roomId): roomId is string => !!roomId))];
+    await prisma.notification.deleteMany({
+      where: {
+        userId,
+        OR: [
+          { applicationId: id },
+          ...(linkedTenant ? [{ tenantId: linkedTenant.id }] : []),
+        ],
+      },
+    });
+    await prisma.booking.deleteMany({
+      where: {
+        OR: [
+          { admissionApplicationId: id },
+          ...(linkedTenant ? [{ tenantId: linkedTenant.id }] : []),
+        ],
+      },
+    });
+    if (linkedTenant) await prisma.tenant.delete({ where: { id: linkedTenant.id } });
     await prisma.admissionApplication.delete({ where: { id } });
     const remainingApplication = await prisma.admissionApplication.findFirst({
       where: { branchId: application.branchId, phone: application.phone },
@@ -488,16 +507,19 @@ export async function deleteAdmissionApplication(req: AuthenticatedRequest, res:
     } else {
       await prisma.admissionSubmissionGuard.deleteMany({ where: { branchId: application.branchId, phone: application.phone } });
     }
-    if (bookedRoomId) await updateRoomOccupancyStatus(bookedRoomId);
+    await Promise.all(affectedRoomIds.map(updateRoomOccupancyStatus));
     const cleanupResults = await Promise.allSettled(
-      application.documents.map((document) => deleteUploadedFile(document.s3Key, document.s3Bucket)),
+      [...application.documents, ...(linkedTenant?.documents || [])]
+        .map((document) => deleteUploadedFile(document.s3Key, document.s3Bucket)),
     );
     for (const result of cleanupResults) {
       if (result.status === 'rejected') console.error('Admission document cleanup error:', result.reason);
     }
 
     res.json({
-      message: 'Admission application and all related records were deleted. This phone number can submit a fresh form.',
+      message: linkedTenant
+        ? 'Accepted admission, resident, and all related records were deleted.'
+        : 'Admission application and all related records were deleted. This phone number can submit a fresh form.',
     });
   } catch (error) {
     console.error('Delete admission application error:', error);

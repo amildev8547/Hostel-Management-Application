@@ -8,6 +8,7 @@ import { RootStackParamList } from '../../navigation';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { applyLocalNotificationState, rememberNotificationHidden, rememberNotificationsSeen } from '../../services/storage';
 import ManualRefreshControl from '../../components/ManualRefreshControl';
+import { formatDateTime } from '../../utils/date';
 import * as Notifications from 'expo-notifications';
 
 type NotificationsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Notifications'>;
@@ -76,7 +77,7 @@ function SwipeableNotification({ item, onPress, onRemove }: { item: any; onPress
     onPanResponderRelease: (_, gesture) => { if (Math.abs(gesture.dx) >= 85) { removing.current = true; Animated.timing(translateX, { toValue: gesture.dx > 0 ? width : -width, duration: 180, useNativeDriver: true }).start(onRemove); } else Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start(); },
     onPanResponderTerminate: () => { if (!removing.current) Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start(); },
   }), [onRemove, translateX, width]);
-  return <View style={styles.swipeContainer}><View style={styles.removeBackground}><Icon name="delete-outline" size={25} color="#FFFFFF" /><Text style={styles.removeText}>Remove</Text><View style={{ flex: 1 }} /><Text style={styles.removeText}>Remove</Text><Icon name="delete-outline" size={25} color="#FFFFFF" /></View><Animated.View style={{ transform: [{ translateX }] }} {...responder.panHandlers}><TouchableOpacity onPress={onPress} activeOpacity={0.78} accessibilityRole="button"><Surface style={[styles.card, !item.isRead && styles.cardUnread]} elevation={1}><View style={[styles.iconWrap, { backgroundColor: `${iconInfo.color}1A` }]}><Icon name={iconInfo.name} size={21} color={iconInfo.color} /></View><View style={styles.cardBody}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.cardMessage}>{item.message}</Text><Text style={styles.cardTime}>{new Date(item.createdAt).toLocaleString('en-IN')}</Text></View>{!item.isRead ? <View style={styles.unreadDot} /> : <Icon name="chevron-right" size={22} color="#94A3B8" />}</Surface></TouchableOpacity></Animated.View></View>;
+  return <View style={styles.swipeContainer}><View style={styles.removeBackground}><Icon name="delete-outline" size={25} color="#FFFFFF" /><Text style={styles.removeText}>Remove</Text><View style={{ flex: 1 }} /><Text style={styles.removeText}>Remove</Text><Icon name="delete-outline" size={25} color="#FFFFFF" /></View><Animated.View style={{ transform: [{ translateX }] }} {...responder.panHandlers}><TouchableOpacity onPress={onPress} activeOpacity={0.78} accessibilityRole="button"><Surface style={[styles.card, !item.isRead && styles.cardUnread]} elevation={1}><View style={[styles.iconWrap, { backgroundColor: `${iconInfo.color}1A` }]}><Icon name={iconInfo.name} size={21} color={iconInfo.color} /></View><View style={styles.cardBody}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.cardMessage}>{item.message}</Text><Text style={styles.cardTime}>{formatDateTime(item.createdAt)}</Text></View>{!item.isRead ? <View style={styles.unreadDot} /> : <Icon name="chevron-right" size={22} color="#94A3B8" />}</Surface></TouchableOpacity></Animated.View></View>;
 }
 
 const styles = StyleSheet.create({

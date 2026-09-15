@@ -11,6 +11,7 @@ import { occupancyColors, occupancyLabels } from '../../theme';
 import { showAlert, showConfirm } from '../../utils/alerts';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 import ManualRefreshControl from '../../components/ManualRefreshControl';
+import { formatDate } from '../../utils/date';
 import { formatRoomType } from '../../utils/roomType';
 
 type RoomDetailsRouteProp = RouteProp<RootStackParamList, 'RoomDetails'>;
@@ -170,7 +171,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
                       </Text>
                     )}
                     <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                      Pay by: {new Date(pay.dueDate).toLocaleDateString()}
+                      Pay by: {formatDate(pay.dueDate)}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
@@ -191,7 +192,7 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
                     </Text>
                     {pay.paidDate && (
                       <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
-                        {new Date(pay.paidDate).toLocaleDateString()}
+                        {formatDate(pay.paidDate)}
                       </Text>
                     )}
                   </View>
