@@ -11,6 +11,7 @@ import { showAlert } from '../../utils/alerts';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 import DateInputField from '../../components/DateInputField';
 import OptionalImageField, { SelectedImage } from '../../components/OptionalImageField';
+import { formatRoomType } from '../../utils/roomType';
 
 type Props = {
   route: RouteProp<RootStackParamList, 'ExistingTenantForm'>;
@@ -120,7 +121,7 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
       <Text style={styles.section}>Current room</Text>
       {availableRooms.map((room) => <TouchableOpacity key={room.id} disabled={editing} onPress={() => setRoomId(room.id)} style={[styles.room, roomId === room.id && styles.roomSelected]}>
         <Icon name="door-open" size={24} color={roomId === room.id ? '#4F46E5' : '#64748B'} />
-        <View style={{ flex: 1 }}><Text style={styles.roomName}>Room {room.roomNumber}</Text><Text style={styles.roomHelp}>{room.floor} · {room.vacant} free {room.vacant === 1 ? 'bed' : 'beds'}</Text></View>
+        <View style={{ flex: 1 }}><Text style={styles.roomName}>Room {room.roomNumber}</Text><Text style={styles.roomHelp}>{room.floor} · {formatRoomType(room.roomType, room.capacity)} · ₹{room.monthlyRent}/month</Text><Text style={styles.roomAvailability}>{room.vacant} free {room.vacant === 1 ? 'bed' : 'beds'}</Text></View>
         <Icon name={roomId === room.id ? 'check-circle' : 'circle-outline'} size={24} color={roomId === room.id ? '#4F46E5' : '#94A3B8'} />
       </TouchableOpacity>)}
       {!availableRooms.length && <Text style={styles.noRooms}>There are no rooms with a free bed.</Text>}
@@ -155,5 +156,5 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 }, content: { padding: 16, paddingBottom: 44 }, intro: { flexDirection: 'row', gap: 13, alignItems: 'center', backgroundColor: '#EEF2FF', borderRadius: 16, padding: 16, marginBottom: 14 }, title: { color: '#172554', fontSize: 20, fontWeight: '900' }, help: { color: '#52627A', fontSize: 14, lineHeight: 20, marginTop: 3 }, card: { backgroundColor: '#FFFFFF', borderRadius: 16 }, section: { color: '#0F172A', fontSize: 16, fontWeight: '800', marginTop: 8, marginBottom: 10 }, input: { backgroundColor: '#FFFFFF', marginBottom: 12 }, room: { flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 13, padding: 13, marginBottom: 9 }, roomSelected: { borderWidth: 2, borderColor: '#4F46E5', backgroundColor: '#EEF2FF' }, roomName: { color: '#1E293B', fontSize: 16, fontWeight: '800' }, roomHelp: { color: '#64748B', fontSize: 13, marginTop: 2 }, noRooms: { color: '#B91C1C', backgroundColor: '#FEF2F2', borderRadius: 12, padding: 13, fontWeight: '700' }, label: { color: '#334155', fontSize: 14, fontWeight: '700', marginBottom: 8 }, segments: { marginBottom: 10 }, note: { color: '#64748B', fontSize: 13, marginBottom: 14 }, optionalButton: { marginBottom: 12, borderRadius: 12 }, save: { minHeight: 52, justifyContent: 'center', borderRadius: 12, marginTop: 6 },
+  container: { flex: 1 }, content: { padding: 16, paddingBottom: 44 }, intro: { flexDirection: 'row', gap: 13, alignItems: 'center', backgroundColor: '#EEF2FF', borderRadius: 16, padding: 16, marginBottom: 14 }, title: { color: '#172554', fontSize: 20, fontWeight: '900' }, help: { color: '#52627A', fontSize: 14, lineHeight: 20, marginTop: 3 }, card: { backgroundColor: '#FFFFFF', borderRadius: 16 }, section: { color: '#0F172A', fontSize: 16, fontWeight: '800', marginTop: 8, marginBottom: 10 }, input: { backgroundColor: '#FFFFFF', marginBottom: 12 }, room: { flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 13, padding: 13, marginBottom: 9 }, roomSelected: { borderWidth: 2, borderColor: '#4F46E5', backgroundColor: '#EEF2FF' }, roomName: { color: '#1E293B', fontSize: 16, fontWeight: '800' }, roomHelp: { color: '#64748B', fontSize: 13, marginTop: 2 }, roomAvailability: { color: '#047857', fontSize: 12, fontWeight: '700', marginTop: 4 }, noRooms: { color: '#B91C1C', backgroundColor: '#FEF2F2', borderRadius: 12, padding: 13, fontWeight: '700' }, label: { color: '#334155', fontSize: 14, fontWeight: '700', marginBottom: 8 }, segments: { marginBottom: 10 }, note: { color: '#64748B', fontSize: 13, marginBottom: 14 }, optionalButton: { marginBottom: 12, borderRadius: 12 }, save: { minHeight: 52, justifyContent: 'center', borderRadius: 12, marginTop: 6 },
 });
