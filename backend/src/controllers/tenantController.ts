@@ -99,7 +99,7 @@ export async function createExistingTenant(req: AuthenticatedRequest, res: Respo
       throw setupError;
     }
 
-    res.status(201).json({ message: `${name} was added as a current resident.`, tenant });
+    res.status(201).json({ message: `${name} was added as a resident.`, tenant });
   } catch (error) {
     await Promise.allSettled(uploads.map((upload) => deleteUploadedFile(upload.key, upload.bucket)));
     console.error('Create existing tenant error:', error);

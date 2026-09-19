@@ -22,13 +22,15 @@ type RentStatus = 'PAID' | 'DUE' | 'SKIP';
 const formatDateForApi = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 export default function ExistingTenantFormScreen({ route, navigation }: Props) {
-  const { branchId, tenantId } = route.params;
+  const tenantId = route.params?.tenantId;
+  const fixedBranchId = route.params?.branchId;
   const editing = !!tenantId;
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
+  const [branchId, setBranchId] = useState(fixedBranchId || '');
   const [roomId, setRoomId] = useState('');
   const [joiningDate, setJoiningDate] = useState(new Date());
   const [address, setAddress] = useState('');
@@ -46,9 +48,15 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
   const [currentRentStatus, setCurrentRentStatus] = useState<RentStatus>('DUE');
   const [saving, setSaving] = useState(false);
 
+  const { data: branches = [] } = useQuery<any[]>({
+    queryKey: ['branchesList', 'resident-form'],
+    queryFn: async () => (await apiClient.get('/branches')).data,
+    enabled: !editing && !fixedBranchId,
+  });
   const { data: rooms = [] } = useQuery<any[]>({
     queryKey: ['branchRooms', branchId],
     queryFn: async () => (await apiClient.get('/rooms', { params: { branchId } })).data,
+    enabled: !!branchId,
   });
   const { data: tenant } = useQuery<any>({
     queryKey: ['tenantProfile', tenantId], queryFn: async () => (await apiClient.get(`/tenants/${tenantId}`)).data,
@@ -63,6 +71,9 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
     setNearestPoliceStation(tenant.nearestPoliceStation || ''); setNotes(tenant.notes || '');
     setLeavingDate(tenant.leavingDate ? new Date(tenant.leavingDate) : null);
   }, [tenant]);
+  useEffect(() => {
+    if (!editing) setRoomId('');
+  }, [branchId, editing]);
   const availableRooms = useMemo(() => editing
     ? rooms.filter((room) => room.id === tenant?.roomId)
     : rooms.filter((room) => room.vacant > 0), [rooms, editing, tenant?.roomId]);
@@ -76,6 +87,7 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
     if (cleanPhone.length !== 10) return showAlert('Enter a valid 10-digit phone number.');
     if (cleanWhatsapp && cleanWhatsapp.length !== 10) return showAlert('Enter a valid WhatsApp number or leave it empty.');
     if (cleanGuardianPhone && cleanGuardianPhone.length !== 10) return showAlert('Enter a valid guardian phone number or leave it empty.');
+    if (!branchId) return showAlert('Choose a hostel branch.');
     if (!roomId) return showAlert('Choose a room.');
 
     setSaving(true);
@@ -109,7 +121,7 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
   return <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <View style={styles.intro}>
       <Icon name="account-plus-outline" size={28} color="#4F46E5" />
-      <View style={{ flex: 1 }}><Text style={styles.title}>{editing ? 'Edit resident details' : 'Add a current resident'}</Text><Text style={styles.help}>{editing ? 'Update contact, family, dates, photo, or identity documents.' : 'Add someone who already lives in this hostel.'}</Text></View>
+      <View style={{ flex: 1 }}><Text style={styles.title}>{editing ? 'Edit resident details' : 'Add a resident'}</Text><Text style={styles.help}>{editing ? 'Update contact, family, dates, photo, or identity documents.' : 'Enter the resident details and assign a room.'}</Text></View>
     </View>
 
     <Card style={styles.card}><Card.Content>
@@ -118,13 +130,21 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
       <TextInput mode="outlined" label="Phone number *" value={phone} onChangeText={setPhone} keyboardType="phone-pad" maxLength={10} style={styles.input} />
       <TextInput mode="outlined" label="WhatsApp number (same if empty)" value={whatsapp} onChangeText={setWhatsapp} keyboardType="phone-pad" maxLength={10} style={styles.input} />
 
-      <Text style={styles.section}>Current room</Text>
+      {!editing && !fixedBranchId && <><Text style={styles.section}>Choose hostel branch</Text>
+      {branches.map((branch) => <TouchableOpacity key={branch.id} onPress={() => setBranchId(branch.id)} style={[styles.room, branchId === branch.id && styles.roomSelected]}>
+        <Icon name="office-building-outline" size={24} color={branchId === branch.id ? '#4F46E5' : '#64748B'} />
+        <View style={{ flex: 1 }}><Text style={styles.roomName}>{branch.name}</Text><Text style={styles.roomHelp}>{branch.address || 'Address not added'}</Text></View>
+        <Icon name={branchId === branch.id ? 'check-circle' : 'circle-outline'} size={24} color={branchId === branch.id ? '#4F46E5' : '#94A3B8'} />
+      </TouchableOpacity>)}
+      {!branches.length && <Text style={styles.noRooms}>Add a hostel branch before adding a resident.</Text>}</>}
+
+      {!!branchId && <><Text style={styles.section}>Choose room</Text>
       {availableRooms.map((room) => <TouchableOpacity key={room.id} disabled={editing} onPress={() => setRoomId(room.id)} style={[styles.room, roomId === room.id && styles.roomSelected]}>
         <Icon name="door-open" size={24} color={roomId === room.id ? '#4F46E5' : '#64748B'} />
         <View style={{ flex: 1 }}><Text style={styles.roomName}>Room {room.roomNumber}</Text><Text style={styles.roomHelp}>{room.floor} · {formatRoomType(room.roomType, room.capacity)} · ₹{room.monthlyRent}/month</Text><Text style={styles.roomAvailability}>{room.vacant} free {room.vacant === 1 ? 'bed' : 'beds'}</Text></View>
         <Icon name={roomId === room.id ? 'check-circle' : 'circle-outline'} size={24} color={roomId === room.id ? '#4F46E5' : '#94A3B8'} />
       </TouchableOpacity>)}
-      {!availableRooms.length && <Text style={styles.noRooms}>There are no rooms with a free bed.</Text>}
+      {!availableRooms.length && <Text style={styles.noRooms}>There are no rooms with a free bed.</Text>}</>}
 
       <Text style={styles.section}>Original joining date</Text>
       <DateInputField value={joiningDate} onChange={setJoiningDate} label="Joining date" maximumDate={!editing ? new Date() : undefined} />
@@ -150,7 +170,7 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
       <TextInput mode="outlined" label="Work location" value={workLocation} onChangeText={setWorkLocation} style={styles.input} />
       <TextInput mode="outlined" label="Nearest police station" value={nearestPoliceStation} onChangeText={setNearestPoliceStation} style={styles.input} />
       <TextInput mode="outlined" label="Notes" value={notes} onChangeText={setNotes} multiline style={styles.input} />
-      <Button mode="contained" icon="account-check" onPress={save} loading={saving} disabled={saving || (!editing && !availableRooms.length)} style={styles.save}>{editing ? 'Save changes' : 'Add current resident'}</Button>
+      <Button mode="contained" icon="account-check" onPress={save} loading={saving} disabled={saving || (!editing && (!branchId || !availableRooms.length))} style={styles.save}>{editing ? 'Save changes' : 'Add resident'}</Button>
     </Card.Content></Card>
   </ScrollView>;
 }

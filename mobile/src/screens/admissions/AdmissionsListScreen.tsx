@@ -128,7 +128,8 @@ export default function AdmissionsListScreen({ navigation }: AdmissionsListScree
       <View style={styles.introBox}>
         <Text style={styles.introTitle}>Admissions and advance bookings</Text>
         <Text style={styles.introText}>Review completed admission forms below. To reserve a room before the person fills the form, open advance bookings.</Text>
-        <Button mode="contained" icon="bed" style={styles.bookingButton} onPress={() => navigation.navigate('BookingList')}>Manage advance bookings</Button>
+        <Button mode="contained" icon="account-plus-outline" style={styles.residentButton} onPress={() => navigation.navigate('ExistingTenantForm')}>Add resident</Button>
+        <Button mode="outlined" icon="bed" style={styles.bookingButton} onPress={() => navigation.navigate('BookingList')}>Manage advance bookings</Button>
       </View>
       <Searchbar
         placeholder="Search people who applied…"
@@ -183,7 +184,8 @@ const styles = StyleSheet.create({
   introBox: { marginHorizontal: 16, marginTop: 16, padding: 16, backgroundColor: '#FEF3C7', borderRadius: 16 },
   introTitle: { color: '#78350F', fontSize: 18, fontWeight: '800' },
   introText: { color: '#57534E', fontSize: 14, lineHeight: 20, marginTop: 4 },
-  bookingButton: { borderRadius: 12, marginTop: 12, minHeight: 46, justifyContent: 'center' },
+  residentButton: { borderRadius: 12, marginTop: 12, minHeight: 46, justifyContent: 'center' },
+  bookingButton: { borderRadius: 12, marginTop: 8, minHeight: 46, justifyContent: 'center', backgroundColor: '#FFFFFF' },
   searchBar: {
     marginHorizontal: 16,
     marginTop: 12,

@@ -47,7 +47,7 @@ export type RootStackParamList = {
   Settings: undefined;
   BookingList: undefined;
   BookingForm: { branchId?: string } | undefined;
-  ExistingTenantForm: { branchId: string; tenantId?: string };
+  ExistingTenantForm: { branchId?: string; tenantId?: string } | undefined;
 };
 
 export type TabParamList = {
@@ -203,7 +203,7 @@ export default function AppNavigator() {
         <RootStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
         <RootStack.Screen name="BookingList" component={BookingListScreen} options={{ title: 'Bed Bookings' }} />
         <RootStack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Book a Bed' }} />
-        <RootStack.Screen name="ExistingTenantForm" component={ExistingTenantFormScreen} options={({ route }) => ({ title: route.params.tenantId ? 'Edit Resident' : 'Add Current Resident' })} />
+        <RootStack.Screen name="ExistingTenantForm" component={ExistingTenantFormScreen} options={({ route }) => ({ title: route.params?.tenantId ? 'Edit Resident' : 'Add Resident' })} />
       </RootStack.Navigator>
     </NavigationContainer>
   );
