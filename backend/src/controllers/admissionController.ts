@@ -613,6 +613,7 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
           nearestPoliceStation: application.nearestPoliceStation,
           occupation: application.occupation,
           workLocation: application.workLocation,
+          notes: application.notes,
           joiningDate: application.joiningDate,
           leavingDate: application.leavingDate,
           status: 'ACTIVE',

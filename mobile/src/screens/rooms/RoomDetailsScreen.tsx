@@ -132,13 +132,9 @@ export default function RoomDetailsScreen({ route, navigation }: RoomDetailsScre
                 key={tenant.id}
                 title={tenant.name}
                 description={`📞 ${tenant.phone}`}
-                left={(props) => (
-                  <Avatar.Image
-                    size={40}
-                    source={{ uri: tenant.profilePhotoUrl || 'https://via.placeholder.com/150' }}
-                    style={{ marginTop: 4, marginRight: 8 }}
-                  />
-                )}
+                left={() => tenant.profilePhotoUrl
+                  ? <Avatar.Image size={40} source={{ uri: tenant.profilePhotoUrl }} style={{ marginTop: 4, marginRight: 8 }} />
+                  : <Avatar.Icon size={40} icon="account" color="#4F46E5" style={{ marginTop: 4, marginRight: 8, backgroundColor: '#EEF2FF' }} />}
                 right={(props) => <IconButton icon="chevron-right" onPress={() => navigation.navigate('TenantProfile', { tenantId: tenant.id })} />}
                 style={styles.listItem}
               />

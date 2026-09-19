@@ -174,10 +174,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
       {/* 1. Header Card */}
       <Surface style={styles.headerCard} elevation={1}>
         <View style={styles.headerRow}>
-          <Image
-            source={{ uri: application.profilePhotoUrl || 'https://via.placeholder.com/150' }}
-            style={styles.avatar}
-          />
+          {application.profilePhotoUrl ? <Image source={{ uri: application.profilePhotoUrl }} style={styles.avatar} /> : <View style={[styles.avatar, { backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center' }]}><Icon name="account" size={44} color="#4F46E5" /></View>}
           <View style={styles.headerInfo}>
             <Text variant="headlineSmall" style={styles.applicantName}>{application.name}</Text>
             <Text variant="bodyMedium" style={{ color: '#64748B', marginTop: 4 }}>
@@ -288,7 +285,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>WhatsApp Number</Text>
-              <Text style={styles.detailVal}>+91 {application.whatsappNumber}</Text>
+              <Text style={styles.detailVal}>{application.whatsappNumber ? `+91 ${application.whatsappNumber}` : 'Not provided'}</Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Work or studies</Text>
@@ -304,7 +301,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Guardian Phone</Text>
-              <Text style={styles.detailVal}>{application.guardianPhone}</Text>
+              <Text style={styles.detailVal}>{application.guardianPhone || 'Not provided'}</Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Preferred room type</Text>
@@ -343,7 +340,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
                 <Text variant="labelSmall" style={styles.docThumbLabel}>Aadhaar Front</Text>
               </TouchableOpacity>
             ) : (
-              <View style={styles.noDoc}><Text>No Aadhaar Front</Text></View>
+              <View style={styles.noDoc}><Icon name="card-account-details-outline" size={30} color="#94A3B8" /><Text>Aadhaar front not added</Text></View>
             )}
 
             {application.aadhaarBackUrl ? (
@@ -352,7 +349,7 @@ export default function AdmissionReviewScreen({ route, navigation }: AdmissionRe
                 <Text variant="labelSmall" style={styles.docThumbLabel}>Aadhaar Back</Text>
               </TouchableOpacity>
             ) : (
-              <View style={styles.noDoc}><Text>No Aadhaar Back</Text></View>
+              <View style={styles.noDoc}><Icon name="card-account-details-outline" size={30} color="#94A3B8" /><Text>Aadhaar back not added</Text></View>
             )}
           </View>
         </Card.Content>

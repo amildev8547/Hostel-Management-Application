@@ -250,7 +250,7 @@ export default function BranchDashboardScreen({ route, navigation }: BranchDashb
             {/* 4. Quick Actions */}
             <Text variant="titleMedium" style={styles.sectionTitle}>Branch Actions</Text>
             <Surface style={styles.actionPanel} elevation={1}>
-              <ActionRow icon="account-plus-outline" title="Add current resident" detail="Add someone who already lives here" onPress={() => navigation.navigate('ExistingTenantForm', { branchId })} />
+              <ActionRow icon="account-plus-outline" title="Add a resident" detail="Add someone staying now or joining later" onPress={() => navigation.navigate('ExistingTenantForm', { branchId })} />
               <ActionRow icon="bed" title="Book a bed" detail="Reserve a place for someone" onPress={() => navigation.navigate('BookingForm', { branchId })} />
               <ActionRow icon="qrcode" title="Show application QR code" detail="Let a person scan and apply" onPress={handleShowQRCode} />
               <ActionRow icon="share-variant" title="Share application form" detail="Send the form using another app" onPress={handleShareAdmissionLink} />

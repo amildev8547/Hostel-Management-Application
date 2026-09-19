@@ -76,6 +76,7 @@ model Tenant {
   nearestPoliceStation String
   occupation           String
   workLocation         String
+  notes                String?
   joiningDate          DateTime
   leavingDate          DateTime?
   status               String     @default("ACTIVE") // ACTIVE, VACATED

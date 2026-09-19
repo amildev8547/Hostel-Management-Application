@@ -23,6 +23,7 @@ interface TenantProfileScreenProps {
 
 const formatRentMonth = (value: string | Date) =>
   new Date(value).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+const showDetail = (value?: string | null) => value?.trim() || 'Not provided';
 
 export default function TenantProfileScreen({ route, navigation }: TenantProfileScreenProps) {
   const { tenantId } = route.params;
@@ -309,10 +310,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
       {/* 1. Profile Header Card */}
       <Surface style={styles.headerCard} elevation={1}>
         <View style={styles.headerRow}>
-          <Image
-            source={{ uri: tenant.profilePhotoUrl || 'https://via.placeholder.com/150' }}
-            style={styles.avatar}
-          />
+          {tenant.profilePhotoUrl ? <Image source={{ uri: tenant.profilePhotoUrl }} style={styles.avatar} /> : <View style={[styles.avatar, styles.avatarFallback]}><Icon name="account" size={46} color="#4F46E5" /></View>}
           <View style={styles.headerInfo}>
             <Text variant="headlineSmall" style={styles.tenantName}>{tenant.name}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
@@ -334,6 +332,10 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
             </Text>
           </View>
         </View>
+
+        <Button mode="outlined" icon="pencil-outline" onPress={() => navigation.navigate('ExistingTenantForm', { branchId: tenant.room.branchId, tenantId })} style={{ marginTop: 14, borderRadius: 12 }}>
+          Edit resident details
+        </Button>
 
         <Divider style={{ marginVertical: 16 }} />
 
@@ -375,30 +377,38 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Work or studies</Text>
-              <Text style={styles.detailVal}>{tenant.occupation}</Text>
+              <Text style={styles.detailVal}>{showDetail(tenant.occupation)}</Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Work or college location</Text>
-              <Text style={styles.detailVal}>{tenant.workLocation}</Text>
+              <Text style={styles.detailVal}>{showDetail(tenant.workLocation)}</Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Guardian Name</Text>
-              <Text style={styles.detailVal}>{tenant.guardianName}</Text>
+              <Text style={styles.detailVal}>{showDetail(tenant.guardianName)}</Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Guardian Phone</Text>
               <TouchableOpacity style={styles.detailValueRow} onPress={() => handleCallNumber(tenant.guardianPhone)}>
-                <Text style={[styles.detailVal, { color: '#0EA5E9' }]}>{tenant.guardianPhone}</Text>
-                <Icon name="phone" size={15} color="#0EA5E9" style={{ marginLeft: 6 }} />
+                <Text style={[styles.detailVal, tenant.guardianPhone ? { color: '#0EA5E9' } : undefined]}>{showDetail(tenant.guardianPhone)}</Text>
+                {!!tenant.guardianPhone && <Icon name="phone" size={15} color="#0EA5E9" style={{ marginLeft: 6 }} />}
               </TouchableOpacity>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Nearest Police Station</Text>
-              <Text style={styles.detailVal}>{tenant.nearestPoliceStation}</Text>
+              <Text style={styles.detailVal}>{showDetail(tenant.nearestPoliceStation)}</Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Permanent Address</Text>
-              <Text style={styles.detailVal}>{tenant.address}</Text>
+              <Text style={styles.detailVal}>{showDetail(tenant.address)}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Expected leaving date</Text>
+              <Text style={styles.detailVal}>{tenant.leavingDate ? formatDate(tenant.leavingDate) : 'Not provided'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Notes</Text>
+              <Text style={styles.detailVal}>{showDetail(tenant.notes)}</Text>
             </View>
           </View>
         </Card.Content>
@@ -416,7 +426,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
                 <Text variant="labelSmall" style={styles.docThumbLabel}>Aadhaar Front</Text>
               </TouchableOpacity>
             ) : (
-              <View style={styles.noDoc}><Text>No Aadhaar Front</Text></View>
+              <View style={styles.noDoc}><Icon name="card-account-details-outline" size={30} color="#94A3B8" /><Text>Aadhaar front not added</Text></View>
             )}
 
             {tenant.aadhaarBackUrl ? (
@@ -425,7 +435,7 @@ export default function TenantProfileScreen({ route, navigation }: TenantProfile
                 <Text variant="labelSmall" style={styles.docThumbLabel}>Aadhaar Back</Text>
               </TouchableOpacity>
             ) : (
-              <View style={styles.noDoc}><Text>No Aadhaar Back</Text></View>
+              <View style={styles.noDoc}><Icon name="card-account-details-outline" size={30} color="#94A3B8" /><Text>Aadhaar back not added</Text></View>
             )}
           </View>
         </Card.Content>
@@ -739,6 +749,7 @@ const styles = StyleSheet.create({
     minHeight: 50,
     justifyContent: 'center',
   },
+  avatarFallback: { backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center' },
   readmitHelp: { color: '#64748B', fontSize: 13, lineHeight: 19, textAlign: 'center' },
   modalBg: {
     flex: 1,

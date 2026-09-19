@@ -107,7 +107,9 @@
 - **Review applications** — owner can approve or reject
 - **Approve with room assignment** — select a room when approving, auto-creates a tenant record
 - **Reject application** with notification
-- **Add current resident directly** — enter an existing resident's original joining date, assign their present room, and record the previous joining fee and current month's rent without sending a new admission form
+- **Add residents directly** — choose someone staying now or joining later, reserve/assign their room, and enter the full admission details with optional photo and Aadhaar uploads
+- **Safe optional details** — incomplete direct entries show clear “Not provided” text and built-in photo/document placeholders until the admin adds the missing information
+- **Edit resident details** — update contact, family, stay dates, notes, profile photo, and Aadhaar documents from the resident profile
 
 ---
 

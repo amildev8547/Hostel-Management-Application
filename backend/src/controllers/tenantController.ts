@@ -1,20 +1,24 @@
 import { Response } from 'express';
+import { randomBytes } from 'crypto';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
 import { updateRoomOccupancyStatus } from '../utils/occupancy';
 import { ensureCurrentMonthRentInvoice } from '../utils/rentBilling';
 import { createOwnerNotification } from '../services/notifications';
-import { deleteUploadedFile } from '../services/cloudinary';
+import { deleteUploadedFile, UploadedFile, uploadFile } from '../services/cloudinary';
+import { getRoomBedAvailability } from './bookingController';
 
 export async function createExistingTenant(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   const {
-    branchId, roomId, name, phone, whatsappNumber, joiningDate, address = '',
+    branchId, roomId, residentType = 'CURRENT', name, phone, whatsappNumber, joiningDate, address = '',
     guardianName = '', guardianPhone = '', nearestPoliceStation = '', occupation = '',
-    workLocation = '', joiningFeeStatus = 'SKIP', currentRentStatus = 'DUE',
+    workLocation = '', notes = '', leavingDate, profilePhoto, aadhaarFront, aadhaarBack,
+    joiningFeeStatus = 'SKIP', currentRentStatus = 'DUE',
   } = req.body;
+  const uploads: UploadedFile[] = [];
 
   try {
     const room = await prisma.room.findUnique({
@@ -33,15 +37,94 @@ export async function createExistingTenant(req: AuthenticatedRequest, res: Respo
       where: { phone, status: 'ACTIVE', room: { branchId } },
     });
     if (duplicate) return res.status(409).json({ error: 'An active resident with this phone number already exists in this hostel.' });
+    if (residentType === 'UPCOMING') {
+      const existingApplication = await prisma.admissionApplication.findFirst({
+        where: { branchId, phone, status: { in: ['PENDING', 'APPROVED'] } },
+      });
+      if (existingApplication) return res.status(409).json({ error: 'An admission for this phone number already exists in this hostel.' });
+    }
 
     const joinedOn = new Date(joiningDate);
-    if (joinedOn > new Date()) return res.status(400).json({ error: 'The joining date cannot be in the future.' });
+    const today = new Date(); today.setHours(23, 59, 59, 999);
+    if (residentType === 'CURRENT' && joinedOn > today) return res.status(400).json({ error: 'Choose Current only for someone who has already joined.' });
+    if (residentType === 'UPCOMING' && joinedOn <= today) return res.status(400).json({ error: 'Choose a future joining date for an upcoming resident.' });
+    if (leavingDate && new Date(leavingDate) < joinedOn) return res.status(400).json({ error: 'Leaving date cannot be before joining date.' });
+
+    const requestBaseUrl = `${req.protocol}://${req.get('host')}`;
+    const uploadOptional = async (data: string | undefined, fileName: string, folder: string) => {
+      if (!data) return undefined;
+      const uploaded = await uploadFile(data, fileName, folder, requestBaseUrl);
+      uploads.push(uploaded);
+      return uploaded;
+    };
+    const profileUpload = await uploadOptional(profilePhoto, 'profile.jpg', 'profile_photos');
+    const aadhaarFrontUpload = await uploadOptional(aadhaarFront, 'aadhaar_front.jpg', 'aadhaar_documents');
+    const aadhaarBackUpload = await uploadOptional(aadhaarBack, 'aadhaar_back.jpg', 'aadhaar_documents');
+
+    if (residentType === 'UPCOMING') {
+      const availability = await getRoomBedAvailability(roomId);
+      const freeBed = availability?.beds.find((bed) => bed.status === 'AVAILABLE');
+      if (!availability || !freeBed) return res.status(409).json({ error: 'The selected room no longer has a free bed.' });
+      const booking = await prisma.booking.create({ data: {
+        name, phone, bedNumber: freeBed.bedNumber, expectedJoiningDate: joinedOn,
+        notes: notes || null, status: 'FORM_SUBMITTED', secureToken: randomBytes(32).toString('hex'),
+        userId, branchId, roomId,
+      } });
+      let applicationId: string | null = null;
+      try {
+        const application = await prisma.admissionApplication.create({ data: {
+          name, phone, whatsappNumber: whatsappNumber || phone, address: address || 'Not provided',
+          guardianName: guardianName || 'Not provided', guardianPhone: guardianPhone || '',
+          nearestPoliceStation: nearestPoliceStation || 'Not provided', occupation: occupation || 'Not provided',
+          workLocation: workLocation || 'Not provided', joiningDate: joinedOn,
+          leavingDate: leavingDate ? new Date(leavingDate) : null, notes: notes || null,
+          preferredRoomType: room.roomType, status: 'PENDING', paymentStatus: joiningFeeStatus === 'PAID' ? 'PAID' : 'PENDING',
+          profilePhotoUrl: profileUpload?.url, aadhaarFrontUrl: aadhaarFrontUpload?.url,
+          aadhaarBackUrl: aadhaarBackUpload?.url, branchId,
+        } });
+        applicationId = application.id;
+        await prisma.admissionSubmissionGuard.upsert({
+          where: { branchId_phone: { branchId, phone } },
+          update: { applicationId: application.id },
+          create: { branchId, phone, applicationId: application.id },
+        });
+        await prisma.booking.update({ where: { id: booking.id }, data: { admissionApplicationId: application.id } });
+        const admissionPayment = await prisma.payment.create({ data: {
+          amount: room.admissionFee, status: joiningFeeStatus === 'PAID' ? 'PAID' : 'PENDING',
+          paymentType: 'ADMISSION', dueDate: joinedOn,
+          paidDate: joiningFeeStatus === 'PAID' ? new Date() : null,
+          transactionId: joiningFeeStatus === 'PAID' ? `DIRECT-${application.id}` : null,
+          admissionApplicationId: application.id, branchId,
+        } });
+        const documentData = [
+          profileUpload && { fileName: 'profile.jpg', fileType: 'PROFILE_PHOTO', upload: profileUpload },
+          aadhaarFrontUpload && { fileName: 'aadhaar_front.jpg', fileType: 'AADHAAR_FRONT', upload: aadhaarFrontUpload },
+          aadhaarBackUpload && { fileName: 'aadhaar_back.jpg', fileType: 'AADHAAR_BACK', upload: aadhaarBackUpload },
+        ].filter(Boolean) as { fileName: string; fileType: string; upload: UploadedFile }[];
+        await Promise.all(documentData.map((document) => prisma.document.create({ data: {
+          fileName: document.fileName, fileType: document.fileType, s3Key: document.upload.key,
+          s3Bucket: document.upload.bucket, admissionApplicationId: application.id,
+        } })));
+        await updateRoomOccupancyStatus(roomId);
+        await createOwnerNotification({ title: 'Upcoming Resident Added', message: `${name}'s bed is reserved in Room ${room.roomNumber}.`, type: 'NEW_ADMISSION', userId, branchId, applicationId: application.id, paymentId: admissionPayment.id });
+        return res.status(201).json({ message: `${name} was added as an upcoming resident with a reserved bed.`, application, upcoming: true });
+      } catch (setupError) {
+        await prisma.booking.deleteMany({ where: { id: booking.id } }).catch(() => undefined);
+        if (applicationId) {
+          await prisma.admissionApplication.deleteMany({ where: { id: applicationId } }).catch(() => undefined);
+          await prisma.admissionSubmissionGuard.deleteMany({ where: { branchId, phone, applicationId } }).catch(() => undefined);
+        }
+        throw setupError;
+      }
+    }
 
     const tenant = await prisma.tenant.create({
       data: {
         name, phone, whatsappNumber: whatsappNumber || phone, address, guardianName,
-        guardianPhone, nearestPoliceStation, occupation, workLocation, joiningDate: joinedOn,
-        status: 'ACTIVE', roomId,
+        guardianPhone, nearestPoliceStation, occupation, workLocation, notes,
+        joiningDate: joinedOn, leavingDate: leavingDate ? new Date(leavingDate) : null,
+        profilePhotoUrl: profileUpload?.url, aadhaarFrontUrl: aadhaarFrontUpload?.url,
+        aadhaarBackUrl: aadhaarBackUpload?.url, status: 'ACTIVE', roomId,
       },
     });
 
@@ -64,6 +147,15 @@ export async function createExistingTenant(req: AuthenticatedRequest, res: Respo
           } });
         }
       }
+      const documentData = [
+        profileUpload && { fileName: 'profile.jpg', fileType: 'PROFILE_PHOTO', upload: profileUpload },
+        aadhaarFrontUpload && { fileName: 'aadhaar_front.jpg', fileType: 'AADHAAR_FRONT', upload: aadhaarFrontUpload },
+        aadhaarBackUpload && { fileName: 'aadhaar_back.jpg', fileType: 'AADHAAR_BACK', upload: aadhaarBackUpload },
+      ].filter(Boolean) as { fileName: string; fileType: string; upload: UploadedFile }[];
+      await Promise.all(documentData.map((document) => prisma.document.create({ data: {
+        fileName: document.fileName, fileType: document.fileType, s3Key: document.upload.key,
+        s3Bucket: document.upload.bucket, tenantId: tenant.id,
+      } })));
       await updateRoomOccupancyStatus(roomId);
       await createOwnerNotification({
         title: 'Existing Resident Added', message: `${name} was added to Room ${room.roomNumber}.`,
@@ -76,6 +168,7 @@ export async function createExistingTenant(req: AuthenticatedRequest, res: Respo
 
     res.status(201).json({ message: `${name} was added as a current resident.`, tenant });
   } catch (error) {
+    await Promise.allSettled(uploads.map((upload) => deleteUploadedFile(upload.key, upload.bucket)));
     console.error('Create existing tenant error:', error);
     res.status(500).json({ error: 'Failed to add the existing resident.' });
   }
@@ -167,10 +260,39 @@ export async function updateTenant(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ error: 'Tenant not found' });
     }
 
+    const { profilePhoto, aadhaarFront, aadhaarBack, joiningDate, leavingDate, ...details } = req.body;
+    const requestBaseUrl = `${req.protocol}://${req.get('host')}`;
+    const imageInputs = [
+      { data: profilePhoto, fileName: 'profile.jpg', fileType: 'PROFILE_PHOTO', folder: 'profile_photos', urlField: 'profilePhotoUrl' },
+      { data: aadhaarFront, fileName: 'aadhaar_front.jpg', fileType: 'AADHAAR_FRONT', folder: 'aadhaar_documents', urlField: 'aadhaarFrontUrl' },
+      { data: aadhaarBack, fileName: 'aadhaar_back.jpg', fileType: 'AADHAAR_BACK', folder: 'aadhaar_documents', urlField: 'aadhaarBackUrl' },
+    ].filter((image) => !!image.data);
+    const newUploads: { image: typeof imageInputs[number]; upload: UploadedFile }[] = [];
+    for (const image of imageInputs) {
+      newUploads.push({ image, upload: await uploadFile(image.data, image.fileName, image.folder, requestBaseUrl) });
+    }
+    const oldDocuments = newUploads.length ? await prisma.document.findMany({
+      where: { tenantId: id, fileType: { in: newUploads.map(({ image }) => image.fileType) } },
+    }) : [];
+    const imageUrls = Object.fromEntries(newUploads.map(({ image, upload }) => [image.urlField, upload.url]));
+
     const updated = await prisma.tenant.update({
       where: { id },
-      data: req.body, // Validated parameters parsed by Zod in routes
+      data: {
+        ...details,
+        ...(joiningDate ? { joiningDate: new Date(joiningDate) } : {}),
+        ...(leavingDate !== undefined ? { leavingDate: leavingDate ? new Date(leavingDate) : null } : {}),
+        ...imageUrls,
+      },
     });
+    for (const { image, upload } of newUploads) {
+      await prisma.document.deleteMany({ where: { tenantId: id, fileType: image.fileType } });
+      await prisma.document.create({ data: {
+        fileName: image.fileName, fileType: image.fileType, s3Key: upload.key,
+        s3Bucket: upload.bucket, tenantId: id,
+      } });
+    }
+    await Promise.allSettled(oldDocuments.map((document) => deleteUploadedFile(document.s3Key, document.s3Bucket)));
 
     res.json(updated);
   } catch (error) {

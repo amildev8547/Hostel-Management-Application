@@ -41,10 +41,7 @@ export default function TenantListScreen({ navigation }: TenantListScreenProps) 
       >
         <Card.Content style={styles.cardContent}>
           <View style={styles.leftSection}>
-            <Avatar.Image
-              size={50}
-              source={{ uri: item.profilePhotoUrl || 'https://via.placeholder.com/150' }}
-            />
+            {item.profilePhotoUrl ? <Avatar.Image size={50} source={{ uri: item.profilePhotoUrl }} /> : <Avatar.Icon size={50} icon="account" style={{ backgroundColor: '#EEF2FF' }} color="#4F46E5" />}
             <View style={styles.infoSection}>
               <Text variant="titleMedium" style={styles.tenantName}>{item.name}</Text>
               <Text variant="bodySmall" style={styles.tenantSub}>📞 {item.phone}</Text>

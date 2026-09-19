@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Button, Card, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import apiClient from '../../services/api';
 import { showAlert } from '../../utils/alerts';
 import { invalidateHostelData } from '../../utils/queryInvalidation';
 import DateInputField from '../../components/DateInputField';
+import OptionalImageField, { SelectedImage } from '../../components/OptionalImageField';
 
 type Props = {
   route: RouteProp<RootStackParamList, 'ExistingTenantForm'>;
@@ -20,10 +21,12 @@ type RentStatus = 'PAID' | 'DUE' | 'SKIP';
 const formatDateForApi = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 export default function ExistingTenantFormScreen({ route, navigation }: Props) {
-  const { branchId } = route.params;
+  const { branchId, tenantId } = route.params;
+  const editing = !!tenantId;
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
+  const [residentType, setResidentType] = useState<'CURRENT' | 'UPCOMING'>('CURRENT');
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [roomId, setRoomId] = useState('');
@@ -33,6 +36,12 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
   const [guardianPhone, setGuardianPhone] = useState('');
   const [occupation, setOccupation] = useState('');
   const [workLocation, setWorkLocation] = useState('');
+  const [nearestPoliceStation, setNearestPoliceStation] = useState('');
+  const [notes, setNotes] = useState('');
+  const [leavingDate, setLeavingDate] = useState<Date | null>(null);
+  const [profilePhoto, setProfilePhoto] = useState<SelectedImage>();
+  const [aadhaarFront, setAadhaarFront] = useState<SelectedImage>();
+  const [aadhaarBack, setAadhaarBack] = useState<SelectedImage>();
   const [joiningFeeStatus, setJoiningFeeStatus] = useState<'PAID' | 'SKIP'>('PAID');
   const [currentRentStatus, setCurrentRentStatus] = useState<RentStatus>('DUE');
   const [saving, setSaving] = useState(false);
@@ -41,7 +50,22 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
     queryKey: ['branchRooms', branchId],
     queryFn: async () => (await apiClient.get('/rooms', { params: { branchId } })).data,
   });
-  const availableRooms = useMemo(() => rooms.filter((room) => room.vacant > 0), [rooms]);
+  const { data: tenant } = useQuery<any>({
+    queryKey: ['tenantProfile', tenantId], queryFn: async () => (await apiClient.get(`/tenants/${tenantId}`)).data,
+    enabled: editing,
+  });
+  useEffect(() => {
+    if (!tenant) return;
+    setName(tenant.name || ''); setPhone(tenant.phone || ''); setWhatsapp(tenant.whatsappNumber || '');
+    setRoomId(tenant.roomId); setJoiningDate(new Date(tenant.joiningDate)); setAddress(tenant.address || '');
+    setGuardianName(tenant.guardianName || ''); setGuardianPhone(tenant.guardianPhone || '');
+    setOccupation(tenant.occupation || ''); setWorkLocation(tenant.workLocation || '');
+    setNearestPoliceStation(tenant.nearestPoliceStation || ''); setNotes(tenant.notes || '');
+    setLeavingDate(tenant.leavingDate ? new Date(tenant.leavingDate) : null);
+  }, [tenant]);
+  const availableRooms = useMemo(() => editing
+    ? rooms.filter((room) => room.id === tenant?.roomId)
+    : rooms.filter((room) => room.vacant > 0), [rooms, editing, tenant?.roomId]);
   const selectedRoom = rooms.find((room) => room.id === roomId);
 
   const save = async () => {
@@ -52,19 +76,33 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
     if (cleanPhone.length !== 10) return showAlert('Enter a valid 10-digit phone number.');
     if (cleanWhatsapp && cleanWhatsapp.length !== 10) return showAlert('Enter a valid WhatsApp number or leave it empty.');
     if (cleanGuardianPhone && cleanGuardianPhone.length !== 10) return showAlert('Enter a valid guardian phone number or leave it empty.');
-    if (!roomId) return showAlert('Choose the room where this resident currently stays.');
+    if (!roomId) return showAlert('Choose a room.');
 
     setSaving(true);
     try {
-      const response = await apiClient.post('/tenants/existing', {
-        branchId, roomId, name: name.trim(), phone: cleanPhone,
-        whatsappNumber: cleanWhatsapp || undefined, joiningDate: formatDateForApi(joiningDate),
-        address: address.trim() || undefined, guardianName: guardianName.trim() || undefined,
-        guardianPhone: cleanGuardianPhone || undefined, occupation: occupation.trim() || undefined,
-        workLocation: workLocation.trim() || undefined, joiningFeeStatus, currentRentStatus,
-      });
-      invalidateHostelData(queryClient, { branchId, roomId, tenantId: response.data.tenant.id });
-      showAlert(response.data.message, 'Resident added', () => navigation.replace('TenantProfile', { tenantId: response.data.tenant.id }));
+      const payload = {
+        branchId, roomId, residentType, name: name.trim(), phone: cleanPhone,
+        whatsappNumber: cleanWhatsapp || cleanPhone, joiningDate: formatDateForApi(joiningDate),
+        address: address.trim(), guardianName: guardianName.trim(), guardianPhone: cleanGuardianPhone,
+        occupation: occupation.trim(), workLocation: workLocation.trim(), nearestPoliceStation: nearestPoliceStation.trim(),
+        notes: notes.trim(), leavingDate: leavingDate ? formatDateForApi(leavingDate) : '',
+        profilePhoto: profilePhoto?.base64, aadhaarFront: aadhaarFront?.base64, aadhaarBack: aadhaarBack?.base64,
+        joiningFeeStatus, currentRentStatus,
+      };
+      if (editing) {
+        const { branchId: _branchId, roomId: _roomId, residentType: _residentType, joiningFeeStatus: _joiningFeeStatus, currentRentStatus: _currentRentStatus, ...editableDetails } = payload;
+        const response = await apiClient.put(`/tenants/${tenantId}`, editableDetails);
+        invalidateHostelData(queryClient, { branchId, roomId, tenantId });
+        showAlert('Resident details updated.', 'Changes saved', () => navigation.goBack());
+        return response;
+      }
+      const response = await apiClient.post('/tenants/existing', payload);
+      invalidateHostelData(queryClient, { branchId, roomId, tenantId: response.data.tenant?.id });
+      if (response.data.upcoming) {
+        showAlert(response.data.message, 'Upcoming resident added', () => navigation.replace('AdmissionReview', { applicationId: response.data.application.id }));
+      } else {
+        showAlert(response.data.message, 'Resident added', () => navigation.replace('TenantProfile', { tenantId: response.data.tenant.id }));
+      }
     } catch (error: any) {
       showAlert(error.response?.data?.error || 'Could not add this resident. Check the details and try again.');
     } finally {
@@ -75,33 +113,39 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
   return <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <View style={styles.intro}>
       <Icon name="account-plus-outline" size={28} color="#4F46E5" />
-      <View style={{ flex: 1 }}><Text style={styles.title}>Add a current resident</Text><Text style={styles.help}>Use this for someone who already lives in this hostel.</Text></View>
+      <View style={{ flex: 1 }}><Text style={styles.title}>{editing ? 'Edit resident details' : 'Add a resident'}</Text><Text style={styles.help}>{editing ? 'Update contact, family, dates, photo, or identity documents.' : 'Add someone staying now or reserve a place for someone joining later.'}</Text></View>
     </View>
 
     <Card style={styles.card}><Card.Content>
       <Text style={styles.section}>Resident details</Text>
+      {!editing && <><Text style={styles.label}>When will this person stay here?</Text><SegmentedButtons value={residentType} onValueChange={(value) => { setResidentType(value as 'CURRENT' | 'UPCOMING'); setJoiningDate(value === 'UPCOMING' ? new Date(Date.now() + 86400000) : new Date()); }} buttons={[{ value: 'CURRENT', label: 'Staying now', icon: 'home-account' }, { value: 'UPCOMING', label: 'Joining later', icon: 'calendar-clock' }]} style={styles.segments} /></>}
       <TextInput mode="outlined" label="Full name *" value={name} onChangeText={setName} style={styles.input} />
       <TextInput mode="outlined" label="Phone number *" value={phone} onChangeText={setPhone} keyboardType="phone-pad" maxLength={10} style={styles.input} />
       <TextInput mode="outlined" label="WhatsApp number (same if empty)" value={whatsapp} onChangeText={setWhatsapp} keyboardType="phone-pad" maxLength={10} style={styles.input} />
 
-      <Text style={styles.section}>Current room</Text>
-      {availableRooms.map((room) => <TouchableOpacity key={room.id} onPress={() => setRoomId(room.id)} style={[styles.room, roomId === room.id && styles.roomSelected]}>
+      <Text style={styles.section}>{residentType === 'UPCOMING' ? 'Reserve a room' : 'Current room'}</Text>
+      {availableRooms.map((room) => <TouchableOpacity key={room.id} disabled={editing} onPress={() => setRoomId(room.id)} style={[styles.room, roomId === room.id && styles.roomSelected]}>
         <Icon name="door-open" size={24} color={roomId === room.id ? '#4F46E5' : '#64748B'} />
         <View style={{ flex: 1 }}><Text style={styles.roomName}>Room {room.roomNumber}</Text><Text style={styles.roomHelp}>{room.floor} · {room.vacant} free {room.vacant === 1 ? 'bed' : 'beds'}</Text></View>
         <Icon name={roomId === room.id ? 'check-circle' : 'circle-outline'} size={24} color={roomId === room.id ? '#4F46E5' : '#94A3B8'} />
       </TouchableOpacity>)}
       {!availableRooms.length && <Text style={styles.noRooms}>There are no rooms with a free bed.</Text>}
 
-      <Text style={styles.section}>Original joining date</Text>
-      <DateInputField value={joiningDate} onChange={setJoiningDate} label="Original joining date" maximumDate={new Date()} />
+      <Text style={styles.section}>{residentType === 'UPCOMING' ? 'Expected joining date' : 'Original joining date'}</Text>
+      <DateInputField value={joiningDate} onChange={setJoiningDate} label="Joining date" minimumDate={!editing && residentType === 'UPCOMING' ? new Date() : undefined} maximumDate={!editing && residentType === 'CURRENT' ? new Date() : undefined} />
+      {leavingDate ? <><Text style={styles.label}>Expected leaving date</Text><DateInputField value={leavingDate} onChange={setLeavingDate} label="Expected leaving date" minimumDate={joiningDate} /><Button mode="text" onPress={() => setLeavingDate(null)}>Remove leaving date</Button></> : <Button mode="outlined" icon="calendar-plus" onPress={() => setLeavingDate(new Date(Math.max(Date.now(), joiningDate.getTime()) + 30 * 86400000))} style={styles.optionalButton}>Add expected leaving date</Button>}
 
-      <Text style={styles.section}>Payment records</Text>
+      {!editing && <><Text style={styles.section}>Payment records</Text>
       <Text style={styles.label}>Was the joining fee already paid?</Text>
       <SegmentedButtons value={joiningFeeStatus} onValueChange={(value) => setJoiningFeeStatus(value as 'PAID' | 'SKIP')} buttons={[{ value: 'PAID', label: 'Yes, paid', icon: 'check' }, { value: 'SKIP', label: 'Do not add' }]} style={styles.segments} />
       {!!selectedRoom && joiningFeeStatus === 'PAID' && <Text style={styles.note}>₹{selectedRoom.admissionFee} will be saved as previously paid.</Text>}
-      <Text style={styles.label}>This month’s rent</Text>
-      <SegmentedButtons value={currentRentStatus} onValueChange={(value) => setCurrentRentStatus(value as RentStatus)} buttons={[{ value: 'DUE', label: 'Still due' }, { value: 'PAID', label: 'Paid' }, { value: 'SKIP', label: 'Later' }]} style={styles.segments} />
-      {!!selectedRoom && currentRentStatus !== 'SKIP' && <Text style={styles.note}>Monthly rent: ₹{selectedRoom.monthlyRent}</Text>}
+      {residentType === 'CURRENT' && <><Text style={styles.label}>This month’s rent</Text><SegmentedButtons value={currentRentStatus} onValueChange={(value) => setCurrentRentStatus(value as RentStatus)} buttons={[{ value: 'DUE', label: 'Still due' }, { value: 'PAID', label: 'Paid' }, { value: 'SKIP', label: 'Later' }]} style={styles.segments} />{!!selectedRoom && currentRentStatus !== 'SKIP' && <Text style={styles.note}>Monthly rent: ₹{selectedRoom.monthlyRent}</Text>}</>}</>}
+
+      <Text style={styles.section}>Photo and Aadhaar (optional)</Text>
+      <Text style={styles.note}>If skipped, the app will show a clear placeholder. You can add these later using Edit.</Text>
+      <OptionalImageField label="Resident photo" icon="account" value={profilePhoto} existingUrl={tenant?.profilePhotoUrl} onChange={setProfilePhoto} />
+      <OptionalImageField label="Aadhaar front" icon="card-account-details-outline" value={aadhaarFront} existingUrl={tenant?.aadhaarFrontUrl} onChange={setAadhaarFront} />
+      <OptionalImageField label="Aadhaar back" icon="card-account-details-outline" value={aadhaarBack} existingUrl={tenant?.aadhaarBackUrl} onChange={setAadhaarBack} />
 
       <Text style={styles.section}>More details (optional)</Text>
       <TextInput mode="outlined" label="Permanent address" value={address} onChangeText={setAddress} multiline style={styles.input} />
@@ -109,11 +153,13 @@ export default function ExistingTenantFormScreen({ route, navigation }: Props) {
       <TextInput mode="outlined" label="Guardian phone" value={guardianPhone} onChangeText={setGuardianPhone} keyboardType="phone-pad" maxLength={10} style={styles.input} />
       <TextInput mode="outlined" label="Occupation" value={occupation} onChangeText={setOccupation} style={styles.input} />
       <TextInput mode="outlined" label="Work location" value={workLocation} onChangeText={setWorkLocation} style={styles.input} />
-      <Button mode="contained" icon="account-check" onPress={save} loading={saving} disabled={saving || !availableRooms.length} style={styles.save}>Add current resident</Button>
+      <TextInput mode="outlined" label="Nearest police station" value={nearestPoliceStation} onChangeText={setNearestPoliceStation} style={styles.input} />
+      <TextInput mode="outlined" label="Notes" value={notes} onChangeText={setNotes} multiline style={styles.input} />
+      <Button mode="contained" icon="account-check" onPress={save} loading={saving} disabled={saving || (!editing && !availableRooms.length)} style={styles.save}>{editing ? 'Save changes' : residentType === 'UPCOMING' ? 'Reserve upcoming resident' : 'Add current resident'}</Button>
     </Card.Content></Card>
   </ScrollView>;
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 }, content: { padding: 16, paddingBottom: 44 }, intro: { flexDirection: 'row', gap: 13, alignItems: 'center', backgroundColor: '#EEF2FF', borderRadius: 16, padding: 16, marginBottom: 14 }, title: { color: '#172554', fontSize: 20, fontWeight: '900' }, help: { color: '#52627A', fontSize: 14, lineHeight: 20, marginTop: 3 }, card: { backgroundColor: '#FFFFFF', borderRadius: 16 }, section: { color: '#0F172A', fontSize: 16, fontWeight: '800', marginTop: 8, marginBottom: 10 }, input: { backgroundColor: '#FFFFFF', marginBottom: 12 }, room: { flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 13, padding: 13, marginBottom: 9 }, roomSelected: { borderWidth: 2, borderColor: '#4F46E5', backgroundColor: '#EEF2FF' }, roomName: { color: '#1E293B', fontSize: 16, fontWeight: '800' }, roomHelp: { color: '#64748B', fontSize: 13, marginTop: 2 }, noRooms: { color: '#B91C1C', backgroundColor: '#FEF2F2', borderRadius: 12, padding: 13, fontWeight: '700' }, label: { color: '#334155', fontSize: 14, fontWeight: '700', marginBottom: 8 }, segments: { marginBottom: 6 }, note: { color: '#64748B', fontSize: 13, marginBottom: 14 }, save: { minHeight: 52, justifyContent: 'center', borderRadius: 12, marginTop: 6 },
+  container: { flex: 1 }, content: { padding: 16, paddingBottom: 44 }, intro: { flexDirection: 'row', gap: 13, alignItems: 'center', backgroundColor: '#EEF2FF', borderRadius: 16, padding: 16, marginBottom: 14 }, title: { color: '#172554', fontSize: 20, fontWeight: '900' }, help: { color: '#52627A', fontSize: 14, lineHeight: 20, marginTop: 3 }, card: { backgroundColor: '#FFFFFF', borderRadius: 16 }, section: { color: '#0F172A', fontSize: 16, fontWeight: '800', marginTop: 8, marginBottom: 10 }, input: { backgroundColor: '#FFFFFF', marginBottom: 12 }, room: { flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 13, padding: 13, marginBottom: 9 }, roomSelected: { borderWidth: 2, borderColor: '#4F46E5', backgroundColor: '#EEF2FF' }, roomName: { color: '#1E293B', fontSize: 16, fontWeight: '800' }, roomHelp: { color: '#64748B', fontSize: 13, marginTop: 2 }, noRooms: { color: '#B91C1C', backgroundColor: '#FEF2F2', borderRadius: 12, padding: 13, fontWeight: '700' }, label: { color: '#334155', fontSize: 14, fontWeight: '700', marginBottom: 8 }, segments: { marginBottom: 10 }, note: { color: '#64748B', fontSize: 13, marginBottom: 14 }, optionalButton: { marginBottom: 12, borderRadius: 12 }, save: { minHeight: 52, justifyContent: 'center', borderRadius: 12, marginTop: 6 },
 });
