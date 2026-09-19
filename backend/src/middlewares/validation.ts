@@ -171,7 +171,6 @@ export const existingTenantSchema = z.object({
   body: z.object({
     branchId: z.string().min(1, 'Hostel branch is required'),
     roomId: z.string().min(1, 'Room is required'),
-    residentType: z.enum(['CURRENT', 'UPCOMING']).default('CURRENT'),
     name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
     phone: z.string().regex(/^\d{10}$/, 'Phone must be exactly 10 digits'),
     whatsappNumber: z.string().regex(/^\d{10}$/, 'WhatsApp number must be exactly 10 digits').optional(),
