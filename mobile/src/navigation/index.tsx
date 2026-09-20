@@ -2,7 +2,7 @@ import React from 'react';
 import { createNavigationContainerRef, NavigationContainer, NavigatorScreenParams, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { Platform, View, StyleSheet, TouchableOpacity } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -180,7 +180,7 @@ export default function AppNavigator() {
   const queryClient = useQueryClient();
   const { user, isLoading } = useAuth();
   React.useEffect(() => {
-    if (user?.role !== 'HOSTEL_ADMIN') return;
+    if (user?.role !== 'HOSTEL_ADMIN' || Platform.OS === 'web') return;
     void registerForPushNotifications();
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
       openPushNotification(response.notification.request.content.data as Record<string, any>);
