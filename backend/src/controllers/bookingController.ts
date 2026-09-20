@@ -39,11 +39,11 @@ export async function getRoomBedAvailability(roomId: string) {
 }
 
 export async function listBookings(req: AuthenticatedRequest, res: Response) {
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const organizationId = req.user?.organizationId;
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
   try {
     const bookings = await prisma.booking.findMany({
-      where: { userId, status: { in: ['RESERVED', 'FORM_SUBMITTED'] } },
+      where: { organizationId, status: { in: ['RESERVED', 'FORM_SUBMITTED'] } },
       include: { branch: true, room: true, admissionApplication: { select: { id: true, status: true } } },
       orderBy: { createdAt: 'desc' },
     });
@@ -56,11 +56,12 @@ export async function listBookings(req: AuthenticatedRequest, res: Response) {
 
 export async function createBooking(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const organizationId = req.user?.organizationId;
+  if (!userId || !organizationId) return res.status(401).json({ error: 'Unauthorized' });
   const { name, phone, branchId, roomId, expectedJoiningDate, notes } = req.body;
   try {
     const branch = await prisma.branch.findUnique({ where: { id: branchId } });
-    if (!branch || branch.userId !== userId) return res.status(404).json({ error: 'Hostel branch not found' });
+    if (!branch || branch.organizationId !== organizationId) return res.status(404).json({ error: 'Hostel branch not found' });
     const availability = await getRoomBedAvailability(roomId);
     if (!availability || availability.room.branchId !== branchId) return res.status(404).json({ error: 'Room not found in this branch' });
     const availableBeds = availability.beds.filter((bed) => bed.status === 'AVAILABLE');
@@ -73,7 +74,7 @@ export async function createBooking(req: AuthenticatedRequest, res: Response) {
           data: {
             name: name.trim(), phone, branchId, roomId, bedNumber: bed.bedNumber,
             expectedJoiningDate: new Date(expectedJoiningDate), notes: notes?.trim() || null,
-            secureToken: randomBytes(32).toString('hex'), userId,
+            secureToken: randomBytes(32).toString('hex'), organizationId, createdByUserId: userId,
           },
           include: { branch: true, room: true },
         });
@@ -94,23 +95,23 @@ export async function createBooking(req: AuthenticatedRequest, res: Response) {
 }
 
 export async function getBooking(req: AuthenticatedRequest, res: Response) {
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const organizationId = req.user?.organizationId;
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
   const booking = await prisma.booking.findUnique({
     where: { id: req.params.id },
     include: { branch: true, room: true, admissionApplication: true },
   });
-  if (!booking || booking.userId !== userId) return res.status(404).json({ error: 'Booking not found' });
+  if (!booking || booking.organizationId !== organizationId) return res.status(404).json({ error: 'Booking not found' });
   const baseUrl = `${req.protocol}://${req.get('host')}`;
   res.json({ ...booking, admissionFormUrl: `${baseUrl}/book/${booking.secureToken}` });
 }
 
 export async function cancelBooking(req: AuthenticatedRequest, res: Response) {
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const organizationId = req.user?.organizationId;
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
   try {
     const booking = await prisma.booking.findUnique({ where: { id: req.params.id }, include: { admissionApplication: true } });
-    if (!booking || booking.userId !== userId) return res.status(404).json({ error: 'Booking not found' });
+    if (!booking || booking.organizationId !== organizationId) return res.status(404).json({ error: 'Booking not found' });
     if (booking.status === 'OCCUPIED') return res.status(400).json({ error: 'This booking is already an active admission and cannot be cancelled here' });
     if (booking.admissionApplication?.status === 'PENDING') {
       await prisma.admissionApplication.update({ where: { id: booking.admissionApplication.id }, data: { status: 'REJECTED' } });
@@ -125,11 +126,11 @@ export async function cancelBooking(req: AuthenticatedRequest, res: Response) {
 }
 
 export async function getRoomBeds(req: AuthenticatedRequest, res: Response) {
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const organizationId = req.user?.organizationId;
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
   const availability = await getRoomBedAvailability(req.params.roomId);
   if (!availability || availability.room.branchId !== req.query.branchId) return res.status(404).json({ error: 'Room not found' });
   const branch = await prisma.branch.findUnique({ where: { id: availability.room.branchId } });
-  if (!branch || branch.userId !== userId) return res.status(404).json({ error: 'Room not found' });
+  if (!branch || branch.organizationId !== organizationId) return res.status(404).json({ error: 'Room not found' });
   res.json({ beds: availability.beds, availableBeds: availability.availableBeds });
 }

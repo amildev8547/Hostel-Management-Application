@@ -23,6 +23,7 @@ export function getRentDueDate(date: Date, requestedDay: number) {
 }
 
 type CurrentMonthRentInput = {
+  organizationId: string;
   tenantId: string;
   branchId: string;
   monthlyRent: number;
@@ -59,6 +60,7 @@ async function ensureCurrentMonthRentInvoiceUnlocked(input: CurrentMonthRentInpu
       status: dueDate < today ? 'OVERDUE' : 'PENDING',
       paymentType: 'RENT',
       dueDate,
+      organizationId: input.organizationId,
       tenantId: input.tenantId,
       branchId: input.branchId,
     },
@@ -84,7 +86,7 @@ export async function ensureCurrentMonthRentInvoice(input: CurrentMonthRentInput
 }
 
 export async function ensureCurrentMonthRentInvoicesForOwner(input: {
-  userId: string;
+  organizationId: string;
   branchId?: string;
   now?: Date;
 }) {
@@ -93,7 +95,7 @@ export async function ensureCurrentMonthRentInvoicesForOwner(input: {
     where: {
       status: 'ACTIVE',
       room: {
-        branch: { userId: input.userId },
+        branch: { organizationId: input.organizationId },
         ...(input.branchId ? { branchId: input.branchId } : {}),
       },
     },
@@ -108,6 +110,7 @@ export async function ensureCurrentMonthRentInvoicesForOwner(input: {
   for (let index = 0; index < tenants.length; index += batchSize) {
     const tenantBatch = tenants.slice(index, index + batchSize);
     const results = await Promise.all(tenantBatch.map((tenant) => ensureCurrentMonthRentInvoice({
+      organizationId: input.organizationId,
       tenantId: tenant.id,
       branchId: tenant.room.branchId,
       monthlyRent: tenant.room.monthlyRent,
@@ -123,7 +126,7 @@ export async function ensureCurrentMonthRentInvoicesForOwner(input: {
   return { generatedCount, skippedTenants };
 }
 
-export async function syncCurrentMonthRentDueDates(input: { userId?: string; branchId?: string; now?: Date }) {
+export async function syncCurrentMonthRentDueDates(input: { organizationId?: string; branchId?: string; now?: Date }) {
   const now = input.now || new Date();
   const { start, nextStart } = getCalendarMonthRange(now);
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -135,7 +138,7 @@ export async function syncCurrentMonthRentDueDates(input: { userId?: string; bra
       tenantId: { not: null },
       dueDate: { gte: start, lt: nextStart },
       ...(input.branchId ? { branchId: input.branchId } : {}),
-      ...(input.userId ? { branch: { userId: input.userId } } : {}),
+      ...(input.organizationId ? { branch: { organizationId: input.organizationId } } : {}),
     },
     include: { tenant: { select: { joiningDate: true } } },
   });
@@ -152,13 +155,13 @@ export async function syncCurrentMonthRentDueDates(input: { userId?: string; bra
   );
 }
 
-export async function markOverdueRentInvoices(userId: string) {
+export async function markOverdueRentInvoices(organizationId: string) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   return prisma.payment.updateMany({
     where: {
-      branch: { userId },
+      branch: { organizationId },
       paymentType: 'RENT',
       status: 'PENDING',
       dueDate: { lt: today },

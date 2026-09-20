@@ -71,9 +71,10 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], limitPublicFormLoads, as
   try {
     const branch = await prisma.branch.findUnique({
       where: { id: branchId },
+      include: { organization: { select: { status: true } } },
     });
 
-    if (!branch) {
+    if (!branch || branch.organization?.status !== 'ACTIVE') {
       return res.status(404).send('<h1>Branch not found</h1>');
     }
 
@@ -803,8 +804,8 @@ router.get('/pay/:paymentId', async (req: Request, res: Response) => {
       include: {
         branch: {
           include: {
-            user: {
-              include: { settings: true },
+            organization: {
+              include: { settings: { where: { userId: null } } },
             },
           },
         },
@@ -817,9 +818,10 @@ router.get('/pay/:paymentId', async (req: Request, res: Response) => {
       return res.status(404).send('<h1>Invoice details not found</h1>');
     }
 
-    const settings = payment.branch.user.settings;
+    if (payment.branch.organization?.status !== 'ACTIVE') return res.status(404).send('<h1>Invoice details not found</h1>');
+    const settings = payment.branch.organization.settings;
     const upiId = settingValue(settings, 'payment_upi_id');
-    const receiverName = settingValue(settings, 'payment_receiver_name') || payment.branch.user.name || payment.branch.name;
+    const receiverName = settingValue(settings, 'payment_receiver_name') || payment.branch.organization.name || payment.branch.name;
     const ownerWhatsapp = onlyDigits(settingValue(settings, 'payment_whatsapp_number'));
     const payerName = payment.tenant?.name || payment.admissionApplication?.name || 'Applicant';
     const roomLabel = payment.tenant?.room?.roomNumber ? `Room ${payment.tenant.room.roomNumber}` : 'Admission Application';

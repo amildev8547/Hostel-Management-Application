@@ -5,10 +5,11 @@ import { updateRoomOccupancyStatus } from '../utils/occupancy';
 import { ensureCurrentMonthRentInvoice } from '../utils/rentBilling';
 import { createOwnerNotification } from '../services/notifications';
 import { deleteUploadedFile, UploadedFile, uploadFile } from '../services/cloudinary';
+import { writeAuditLog } from '../services/audit';
 
 export async function createExistingTenant(req: AuthenticatedRequest, res: Response) {
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const organizationId = req.user?.organizationId;
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   const {
     branchId, roomId, name, phone, whatsappNumber, joiningDate, address = '',
@@ -23,7 +24,7 @@ export async function createExistingTenant(req: AuthenticatedRequest, res: Respo
       where: { id: roomId },
       include: { branch: true, tenants: { where: { status: 'ACTIVE' } }, bookings: true },
     });
-    if (!room || room.branchId !== branchId || room.branch.userId !== userId) {
+    if (!room || room.branchId !== branchId || room.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Selected room was not found in this hostel.' });
     }
     const reservedBeds = room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
@@ -57,7 +58,7 @@ export async function createExistingTenant(req: AuthenticatedRequest, res: Respo
         guardianPhone, nearestPoliceStation, occupation, workLocation, notes,
         joiningDate: joinedOn, leavingDate: leavingDate ? new Date(leavingDate) : null,
         profilePhotoUrl: profileUpload?.url, aadhaarFrontUrl: aadhaarFrontUpload?.url,
-        aadhaarBackUrl: aadhaarBackUpload?.url, status: 'ACTIVE', roomId,
+        aadhaarBackUrl: aadhaarBackUpload?.url, status: 'ACTIVE', organizationId, roomId,
       },
     });
 
@@ -67,12 +68,12 @@ export async function createExistingTenant(req: AuthenticatedRequest, res: Respo
         await prisma.payment.create({ data: {
           amount: room.admissionFee, status: 'PAID', paymentType: 'ADMISSION', dueDate: joinedOn,
           paidDate: joinedOn, transactionId: `EXISTING-${tenant.id}`,
-          tenantId: tenant.id, branchId,
+          organizationId, tenantId: tenant.id, branchId,
         } });
       }
       if (currentRentStatus !== 'SKIP') {
         const result = await ensureCurrentMonthRentInvoice({
-          tenantId: tenant.id, branchId, monthlyRent: room.monthlyRent, joiningDate: joinedOn, now,
+          organizationId, tenantId: tenant.id, branchId, monthlyRent: room.monthlyRent, joiningDate: joinedOn, now,
         });
         if (currentRentStatus === 'PAID') {
           await prisma.payment.update({ where: { id: result.payment.id }, data: {
@@ -87,12 +88,12 @@ export async function createExistingTenant(req: AuthenticatedRequest, res: Respo
       ].filter(Boolean) as { fileName: string; fileType: string; upload: UploadedFile }[];
       await Promise.all(documentData.map((document) => prisma.document.create({ data: {
         fileName: document.fileName, fileType: document.fileType, s3Key: document.upload.key,
-        s3Bucket: document.upload.bucket, tenantId: tenant.id,
+        s3Bucket: document.upload.bucket, organizationId, tenantId: tenant.id,
       } })));
       await updateRoomOccupancyStatus(roomId);
       await createOwnerNotification({
         title: 'Existing Resident Added', message: `${name} was added to Room ${room.roomNumber}.`,
-        type: 'ADMISSION_APPROVED', userId, branchId, tenantId: tenant.id,
+        type: 'ADMISSION_APPROVED', organizationId, branchId, tenantId: tenant.id,
       });
     } catch (setupError) {
       await prisma.tenant.delete({ where: { id: tenant.id } }).catch(() => undefined);
@@ -108,16 +109,16 @@ export async function createExistingTenant(req: AuthenticatedRequest, res: Respo
 }
 
 export async function getTenants(req: AuthenticatedRequest, res: Response) {
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
   const { branchId, status, search } = req.query;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const tenants = await prisma.tenant.findMany({
       where: {
         room: {
-          branch: { userId },
+          branch: { organizationId },
           ...(branchId ? { branchId: branchId as string } : {}),
         },
         ...(status ? { status: status as string } : { status: 'ACTIVE' }), // Default to active
@@ -148,9 +149,9 @@ export async function getTenants(req: AuthenticatedRequest, res: Response) {
 
 export async function getTenantById(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const tenant = await prisma.tenant.findUnique({
@@ -166,7 +167,7 @@ export async function getTenantById(req: AuthenticatedRequest, res: Response) {
       },
     });
 
-    if (!tenant || tenant.room.branch.userId !== userId) {
+    if (!tenant || tenant.room.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Tenant not found' });
     }
 
@@ -179,9 +180,9 @@ export async function getTenantById(req: AuthenticatedRequest, res: Response) {
 
 export async function updateTenant(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const tenant = await prisma.tenant.findUnique({
@@ -189,7 +190,7 @@ export async function updateTenant(req: AuthenticatedRequest, res: Response) {
       include: { room: { include: { branch: true } } },
     });
 
-    if (!tenant || tenant.room.branch.userId !== userId) {
+    if (!tenant || tenant.room.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Tenant not found' });
     }
 
@@ -222,7 +223,7 @@ export async function updateTenant(req: AuthenticatedRequest, res: Response) {
       await prisma.document.deleteMany({ where: { tenantId: id, fileType: image.fileType } });
       await prisma.document.create({ data: {
         fileName: image.fileName, fileType: image.fileType, s3Key: upload.key,
-        s3Bucket: upload.bucket, tenantId: id,
+        s3Bucket: upload.bucket, organizationId, tenantId: id,
       } });
     }
     await Promise.allSettled(oldDocuments.map((document) => deleteUploadedFile(document.s3Key, document.s3Bucket)));
@@ -237,9 +238,9 @@ export async function updateTenant(req: AuthenticatedRequest, res: Response) {
 export async function moveTenant(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
   const { newRoomId } = req.body;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
   if (!newRoomId) return res.status(400).json({ error: 'newRoomId is required' });
 
   try {
@@ -248,7 +249,7 @@ export async function moveTenant(req: AuthenticatedRequest, res: Response) {
       include: { room: { include: { branch: true } } },
     });
 
-    if (!tenant || tenant.room.branch.userId !== userId) {
+    if (!tenant || tenant.room.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Tenant not found' });
     }
 
@@ -268,7 +269,7 @@ export async function moveTenant(req: AuthenticatedRequest, res: Response) {
       include: { tenants: { where: { status: 'ACTIVE' } }, bookings: true, branch: true },
     });
 
-    if (!newRoom || newRoom.branch.userId !== userId) {
+    if (!newRoom || newRoom.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Selected room not found' });
     }
 
@@ -293,7 +294,7 @@ export async function moveTenant(req: AuthenticatedRequest, res: Response) {
       title: 'Resident Room Changed',
       message: `${tenant.name} was moved from Room ${tenant.room.roomNumber} to Room ${newRoom.roomNumber}.`,
       type: 'ADMISSION_APPROVED',
-      userId,
+      organizationId,
       branchId: newRoom.branchId,
       tenantId: id,
     });
@@ -307,9 +308,9 @@ export async function moveTenant(req: AuthenticatedRequest, res: Response) {
 
 export async function vacateTenant(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const tenant = await prisma.tenant.findUnique({
@@ -317,7 +318,7 @@ export async function vacateTenant(req: AuthenticatedRequest, res: Response) {
       include: { room: { include: { branch: true } } },
     });
 
-    if (!tenant || tenant.room.branch.userId !== userId) {
+    if (!tenant || tenant.room.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Tenant not found' });
     }
 
@@ -344,7 +345,7 @@ export async function vacateTenant(req: AuthenticatedRequest, res: Response) {
       title: 'Resident Moved Out',
       message: `${tenant.name} has moved out of Room ${tenant.room.roomNumber}.`,
       type: 'TENANT_VACATED',
-      userId,
+      organizationId,
       branchId: tenant.room.branchId,
       tenantId: id,
     });
@@ -359,9 +360,9 @@ export async function vacateTenant(req: AuthenticatedRequest, res: Response) {
 export async function readmitTenant(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
   const { newRoomId } = req.body;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
   if (!newRoomId) return res.status(400).json({ error: 'Choose a room for the returning resident.' });
 
   try {
@@ -370,7 +371,7 @@ export async function readmitTenant(req: AuthenticatedRequest, res: Response) {
       include: { room: { include: { branch: true } } },
     });
 
-    if (!tenant || tenant.room.branch.userId !== userId) {
+    if (!tenant || tenant.room.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Resident not found' });
     }
     if (tenant.status !== 'VACATED') {
@@ -381,7 +382,7 @@ export async function readmitTenant(req: AuthenticatedRequest, res: Response) {
       where: { id: newRoomId },
       include: { tenants: { where: { status: 'ACTIVE' } }, bookings: true, branch: true },
     });
-    if (!newRoom || newRoom.branch.userId !== userId) {
+    if (!newRoom || newRoom.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Selected room not found' });
     }
 
@@ -410,6 +411,7 @@ export async function readmitTenant(req: AuthenticatedRequest, res: Response) {
     if (oldRoomId !== newRoomId) await updateRoomOccupancyStatus(oldRoomId);
     await updateRoomOccupancyStatus(newRoomId);
     await ensureCurrentMonthRentInvoice({
+      organizationId,
       tenantId: id,
       branchId: newRoom.branchId,
       monthlyRent: newRoom.monthlyRent,
@@ -420,7 +422,7 @@ export async function readmitTenant(req: AuthenticatedRequest, res: Response) {
       title: 'Resident Admitted Again',
       message: `${tenant.name} has returned and was assigned to Room ${newRoom.roomNumber}.`,
       type: 'ADMISSION_APPROVED',
-      userId,
+      organizationId,
       branchId: newRoom.branchId,
       tenantId: id,
     });
@@ -437,9 +439,9 @@ export async function readmitTenant(req: AuthenticatedRequest, res: Response) {
 export async function createCustomRentInvoice(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
   const { days, discountAmount = 0, dueDate } = req.body;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const tenant = await prisma.tenant.findUnique({
@@ -447,7 +449,7 @@ export async function createCustomRentInvoice(req: AuthenticatedRequest, res: Re
       include: { room: { include: { branch: true } } },
     });
 
-    if (!tenant || tenant.room.branch.userId !== userId) {
+    if (!tenant || tenant.room.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Tenant not found' });
     }
 
@@ -468,6 +470,7 @@ export async function createCustomRentInvoice(req: AuthenticatedRequest, res: Re
         status: 'PENDING',
         paymentType: 'RENT',
         dueDate: dueDate ? new Date(dueDate) : new Date(),
+        organizationId,
         tenantId: tenant.id,
         branchId: tenant.room.branchId,
       },
@@ -482,9 +485,9 @@ export async function createCustomRentInvoice(req: AuthenticatedRequest, res: Re
 
 export async function deleteTenant(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const tenant = await prisma.tenant.findUnique({
@@ -492,7 +495,7 @@ export async function deleteTenant(req: AuthenticatedRequest, res: Response) {
       include: { room: { include: { branch: true } }, documents: true },
     });
 
-    if (!tenant || tenant.room.branch.userId !== userId) {
+    if (!tenant || tenant.room.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Tenant not found' });
     }
 
@@ -510,7 +513,7 @@ export async function deleteTenant(req: AuthenticatedRequest, res: Response) {
 
     await prisma.notification.deleteMany({
       where: {
-        userId,
+        organizationId,
         OR: [
           { tenantId: id },
           ...(applicationIds.length ? [{ applicationId: { in: applicationIds } }] : []),
@@ -523,6 +526,7 @@ export async function deleteTenant(req: AuthenticatedRequest, res: Response) {
     if (applicationIds.length) {
       await prisma.admissionApplication.deleteMany({ where: { id: { in: applicationIds } } });
     }
+    await writeAuditLog(req, { action: 'RESIDENT_DELETED', entityType: 'Tenant', entityId: id, metadata: { branchId } });
 
     // Recalculate room occupancy status
     await updateRoomOccupancyStatus(roomId);

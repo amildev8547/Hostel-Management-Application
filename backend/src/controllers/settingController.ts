@@ -4,13 +4,12 @@ import prisma from '../config/db';
 
 export async function getSettings(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!userId || !organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    const settingsList = await prisma.setting.findMany({
-      where: { userId },
-    });
+    const settingsList = await prisma.setting.findMany({ where: { OR: [{ organizationId, userId: null }, { userId }] } });
 
     // Map list of settings to key-value object
     const settingsObj: Record<string, string> = {};
@@ -27,13 +26,17 @@ export async function getSettings(req: AuthenticatedRequest, res: Response) {
 
 export async function updateSetting(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
   const { key, value } = req.body;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!userId || !organizationId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const isUserPreference = ['notification_alerts_enabled', 'dismissed_notification_alert_ids'].includes(String(key));
+  const scope = isUserPreference ? { userId } : { organizationId, userId: null };
 
   try {
     const existing = await prisma.setting.findFirst({
-      where: { userId, key },
+      where: { ...scope, key },
     });
 
     if (existing) {
@@ -47,7 +50,7 @@ export async function updateSetting(req: AuthenticatedRequest, res: Response) {
         data: {
           key,
           value: String(value),
-          userId,
+          ...scope,
         },
       });
       return res.json(created);

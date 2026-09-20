@@ -1,7 +1,8 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const TOKEN_KEY = 'hostelhub_user_token';
+const ACCESS_TOKEN_KEY = 'hostelhub_access_token';
+const REFRESH_TOKEN_KEY = 'hostelhub_refresh_token';
 const USER_KEY = 'hostelhub_user_info';
 const SEEN_NOTIFICATIONS_KEY = 'hostelhub_seen_notifications';
 const HIDDEN_NOTIFICATIONS_KEY = 'hostelhub_hidden_notifications';
@@ -20,15 +21,27 @@ const store = Platform.OS === 'web'
   : SecureStore;
 
 export async function setToken(token: string): Promise<void> {
-  await store.setItemAsync(TOKEN_KEY, token);
+  await store.setItemAsync(ACCESS_TOKEN_KEY, token);
 }
 
 export async function getToken(): Promise<string | null> {
-  return await store.getItemAsync(TOKEN_KEY);
+  return await store.getItemAsync(ACCESS_TOKEN_KEY);
 }
 
 export async function removeToken(): Promise<void> {
-  await store.deleteItemAsync(TOKEN_KEY);
+  await store.deleteItemAsync(ACCESS_TOKEN_KEY);
+}
+
+export async function setRefreshToken(token: string): Promise<void> {
+  await store.setItemAsync(REFRESH_TOKEN_KEY, token);
+}
+
+export async function getRefreshToken(): Promise<string | null> {
+  return store.getItemAsync(REFRESH_TOKEN_KEY);
+}
+
+export async function setSession(accessToken: string, refreshToken: string, user: any): Promise<void> {
+  await Promise.all([setToken(accessToken), setRefreshToken(refreshToken), setUser(user)]);
 }
 
 export async function setUser(user: any): Promise<void> {
@@ -46,8 +59,13 @@ export async function getUser(): Promise<any | null> {
 }
 
 export async function clearSession(): Promise<void> {
-  await store.deleteItemAsync(TOKEN_KEY);
-  await store.deleteItemAsync(USER_KEY);
+  await Promise.all([
+    store.deleteItemAsync(ACCESS_TOKEN_KEY),
+    store.deleteItemAsync(REFRESH_TOKEN_KEY),
+    store.deleteItemAsync(USER_KEY),
+    store.deleteItemAsync(SEEN_NOTIFICATIONS_KEY),
+    store.deleteItemAsync(HIDDEN_NOTIFICATIONS_KEY),
+  ]);
 }
 
 async function getIdList(key: string): Promise<string[]> {

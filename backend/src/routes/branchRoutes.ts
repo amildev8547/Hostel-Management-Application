@@ -7,12 +7,12 @@ import {
   deleteBranch,
   getBranchDashboard,
 } from '../controllers/branchController';
-import { authenticateJWT } from '../middlewares/auth';
+import { authenticateJWT, requireOrganization } from '../middlewares/auth';
 import { validate, branchSchema } from '../middlewares/validation';
 
 const router = Router();
 
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireOrganization);
 
 router.post('/', validate(branchSchema), createBranch);
 router.get('/', getBranches);

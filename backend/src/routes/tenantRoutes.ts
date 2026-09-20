@@ -10,12 +10,12 @@ import {
   readmitTenant,
   createExistingTenant,
 } from '../controllers/tenantController';
-import { authenticateJWT } from '../middlewares/auth';
+import { authenticateJWT, requireOrganization } from '../middlewares/auth';
 import { validate, tenantEditSchema, customRentSchema, existingTenantSchema } from '../middlewares/validation';
 
 const router = Router();
 
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireOrganization);
 
 router.get('/', getTenants);
 router.post('/existing', validate(existingTenantSchema), createExistingTenant);

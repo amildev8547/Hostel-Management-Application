@@ -9,11 +9,14 @@ function hashToken(token: string) {
 
 export async function issueAdmissionFormToken(branchId: string, bookingToken?: string) {
   const now = new Date();
+  const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { organizationId: true, organization: { select: { status: true } } } });
+  if (!branch?.organizationId || branch.organization?.status !== 'ACTIVE') throw new Error('This hostel account is not active');
   await prisma.admissionFormToken.deleteMany({ where: { expiresAt: { lt: now } } });
   const token = randomBytes(32).toString('hex');
   await prisma.admissionFormToken.create({
     data: {
       tokenHash: hashToken(token),
+      organizationId: branch.organizationId,
       branchId,
       bookingToken: bookingToken || null,
       expiresAt: new Date(now.getTime() + FORM_TOKEN_LIFETIME_MS),

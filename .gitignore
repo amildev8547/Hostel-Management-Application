@@ -13,6 +13,7 @@ mobile/ios/
 
 # Database
 backend/prisma/dev.db
+backend/.cache/
 
 # Uploads (local file storage)
 backend/public/uploads/

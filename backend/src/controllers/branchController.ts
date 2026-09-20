@@ -2,14 +2,19 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import prisma from '../config/db';
 import { calculateBranchMetrics } from '../utils/occupancy';
+import { writeAuditLog } from '../services/audit';
 
 export async function createBranch(req: AuthenticatedRequest, res: Response) {
   const { name, address, phone = '', googleMapsLocation, rentDueDay = 5, status } = req.body;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
+    const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { maxBranches: true, _count: { select: { branches: true } } } });
+    if (organization?.maxBranches && organization._count.branches >= organization.maxBranches) {
+      return res.status(409).json({ error: `This account can have up to ${organization.maxBranches} hostel branches.` });
+    }
     const branch = await prisma.branch.create({
       data: {
         name,
@@ -18,7 +23,7 @@ export async function createBranch(req: AuthenticatedRequest, res: Response) {
         googleMapsLocation,
         rentDueDay,
         status: status || 'ACTIVE',
-        userId,
+        organizationId,
       },
     });
     res.status(201).json(branch);
@@ -29,15 +34,15 @@ export async function createBranch(req: AuthenticatedRequest, res: Response) {
 }
 
 export async function getBranches(req: AuthenticatedRequest, res: Response) {
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
   const { search } = req.query;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const branches = await prisma.branch.findMany({
       where: {
-        userId,
+        organizationId,
         ...(search
           ? {
               OR: [
@@ -118,16 +123,16 @@ export async function getBranches(req: AuthenticatedRequest, res: Response) {
 
 export async function getBranchById(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const branch = await prisma.branch.findUnique({
       where: { id },
     });
 
-    if (!branch || branch.userId !== userId) {
+    if (!branch || branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Branch not found' });
     }
 
@@ -141,14 +146,14 @@ export async function getBranchById(req: AuthenticatedRequest, res: Response) {
 export async function updateBranch(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
   const { name, address, status } = req.body;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const checkBranch = await prisma.branch.findUnique({ where: { id } });
 
-    if (!checkBranch || checkBranch.userId !== userId) {
+    if (!checkBranch || checkBranch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Branch not found' });
     }
 
@@ -170,18 +175,19 @@ export async function updateBranch(req: AuthenticatedRequest, res: Response) {
 
 export async function deleteBranch(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const checkBranch = await prisma.branch.findUnique({ where: { id } });
 
-    if (!checkBranch || checkBranch.userId !== userId) {
+    if (!checkBranch || checkBranch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Branch not found' });
     }
 
     await prisma.branch.delete({ where: { id } });
+    await writeAuditLog(req, { action: 'BRANCH_DELETED', entityType: 'Branch', entityId: id, metadata: { name: checkBranch.name } });
     res.json({ message: 'Branch deleted successfully' });
   } catch (error) {
     console.error('Delete branch error:', error);
@@ -191,14 +197,14 @@ export async function deleteBranch(req: AuthenticatedRequest, res: Response) {
 
 export async function getBranchDashboard(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const branch = await prisma.branch.findUnique({ where: { id } });
 
-    if (!branch || branch.userId !== userId) {
+    if (!branch || branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Branch not found' });
     }
 

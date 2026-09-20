@@ -6,8 +6,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { showAlert } from '../../utils/alerts';
 
-export default function SettingsScreen() {
-  const { user } = useAuth();
+export default function SettingsScreen({ navigation }: any) {
+  const { user, logout } = useAuth();
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [upiId, setUpiId] = useState('');
@@ -75,7 +75,7 @@ export default function SettingsScreen() {
           <Text variant="titleLarge" style={styles.profileName}>{user?.name || 'Hostel Owner'}</Text>
           <Text variant="bodyMedium" style={{ color: '#64748B' }}>{user?.email}</Text>
           <Text variant="labelSmall" style={[styles.roleBadge, { backgroundColor: '#EEF2FF', color: theme.colors.primary }]}>
-            Hostel owner
+            {user?.organization?.name || 'Hostel administrator'}
           </Text>
         </View>
       </Surface>
@@ -110,6 +110,43 @@ export default function SettingsScreen() {
                 color={theme.colors.primary}
               />
             )}
+          />
+        </Card.Content>
+      </Card>
+
+      <Text variant="titleMedium" style={styles.sectionTitle}>Account and security</Text>
+      <Card style={styles.settingsCard}>
+        <Card.Content style={{ padding: 0 }}>
+          <List.Item
+            title="Name and email"
+            description="Update your administrator account"
+            left={(props) => <List.Icon {...props} icon="account-edit-outline" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => navigation.navigate('AccountProfile')}
+          />
+          <Divider />
+          <List.Item
+            title="Active sessions"
+            description="See where this account is signed in"
+            left={(props) => <List.Icon {...props} icon="devices" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => navigation.navigate('Sessions')}
+          />
+          <Divider />
+          <List.Item
+            title="Change password"
+            description="Update the password used to sign in"
+            left={(props) => <List.Icon {...props} icon="lock-outline" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => navigation.navigate('ChangePassword')}
+          />
+          <Divider />
+          <List.Item
+            title="Sign out"
+            description="Remove this account from this device"
+            titleStyle={{ color: '#DC2626' }}
+            left={(props) => <List.Icon {...props} icon="logout" color="#DC2626" />}
+            onPress={logout}
           />
         </Card.Content>
       </Card>
@@ -167,11 +204,7 @@ export default function SettingsScreen() {
             left={(props) => <List.Icon {...props} icon="information-outline" />}
           />
           <Divider />
-          <List.Item
-            title="Made for one hostel owner"
-            description="This installation opens directly for the owner"
-            left={(props) => <List.Icon {...props} icon="cellphone-cog" />}
-          />
+          <List.Item title="Account type" description="Secure multi-hostel account" left={(props) => <List.Icon {...props} icon="shield-account-outline" />} />
         </Card.Content>
       </Card>
 

@@ -7,6 +7,7 @@ import { buildUpiPaymentUrl, getSettingValue } from '../utils/upi';
 import { ensureCurrentMonthRentInvoice, getCalendarMonthRange } from '../utils/rentBilling';
 import { createOwnerNotification } from '../services/notifications';
 import { claimAdmissionFormToken } from '../services/admissionFormSecurity';
+import { writeAuditLog } from '../services/audit';
 
 // Public endpoint: Submit application
 export async function submitAdmissionApplication(req: Request, res: Response) {
@@ -53,13 +54,13 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     const branch = await prisma.branch.findUnique({
       where: { id: selectedBranchId },
       include: {
-        user: {
-          include: { settings: true },
+        organization: {
+          include: { settings: { where: { userId: null } } },
         },
       },
     });
 
-    if (!branch) {
+    if (!branch || !branch.organizationId || branch.organization?.status !== 'ACTIVE') {
       return res.status(404).json({ error: 'Selected branch does not exist' });
     }
 
@@ -85,7 +86,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     }
     try {
       const guard = await prisma.admissionSubmissionGuard.create({
-        data: { branchId: selectedBranchId, phone: selectedPhone },
+        data: { organizationId: branch.organizationId, branchId: selectedBranchId, phone: selectedPhone },
       });
       submissionGuardId = guard.id;
     } catch (error: any) {
@@ -150,6 +151,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
         aadhaarFrontUrl: aadhaarFrontUpload.url,
         aadhaarBackUrl: aadhaarBackUpload.url,
         notes,
+        organizationId: branch.organizationId,
         branchId: selectedBranchId,
         status: 'PENDING',
         paymentStatus: 'PENDING',
@@ -165,6 +167,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
           fileType: 'PROFILE_PHOTO',
           s3Key: profileUpload.key,
           s3Bucket: profileUpload.bucket,
+          organizationId: branch.organizationId,
           admissionApplicationId: application.id,
         },
         {
@@ -172,6 +175,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
           fileType: 'AADHAAR_FRONT',
           s3Key: aadhaarFrontUpload.key,
           s3Bucket: aadhaarFrontUpload.bucket,
+          organizationId: branch.organizationId,
           admissionApplicationId: application.id,
         },
         {
@@ -179,6 +183,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
           fileType: 'AADHAAR_BACK',
           s3Key: aadhaarBackUpload.key,
           s3Bucket: aadhaarBackUpload.bucket,
+          organizationId: branch.organizationId,
           admissionApplicationId: application.id,
         },
       ],
@@ -192,6 +197,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
         status: 'PENDING',
         paymentType: 'ADMISSION',
         dueDate: new Date(),
+        organizationId: branch.organizationId,
         admissionApplicationId: application.id,
         branchId: selectedBranchId,
       },
@@ -200,8 +206,8 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     currentStep = 'saving manual payment page';
     const manualPaymentUrl = `${requestBaseUrl}/pay/${payment.id}`;
     const upiPaymentUrl = buildUpiPaymentUrl({
-      upiId: getSettingValue(branch.user.settings, 'payment_upi_id'),
-      receiverName: getSettingValue(branch.user.settings, 'payment_receiver_name') || branch.user.name || branch.name,
+      upiId: getSettingValue(branch.organization?.settings, 'payment_upi_id'),
+      receiverName: getSettingValue(branch.organization?.settings, 'payment_receiver_name') || branch.organization?.name || branch.name,
       amount,
       note: `HostelHub ADMISSION ${payment.id}`,
     });
@@ -224,7 +230,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
       title: 'New Admission Form',
       message: `${selectedName} submitted an admission form for ${branch.name}.`,
       type: 'NEW_ADMISSION',
-      userId: branch.userId,
+      organizationId: branch.organizationId,
       branchId: selectedBranchId,
       applicationId: application.id,
       paymentId: payment.id,
@@ -263,15 +269,15 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
 
 // Owner endpoint: Get all applications
 export async function getAdmissionApplications(req: AuthenticatedRequest, res: Response) {
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
   const { branchId, status, search } = req.query;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const applications = await prisma.admissionApplication.findMany({
       where: {
-        branch: { userId },
+        branch: { organizationId },
         ...(branchId ? { branchId: branchId as string } : {}),
         ...(status ? { status: status as string } : {}),
         ...(search
@@ -296,7 +302,7 @@ export async function getAdmissionApplications(req: AuthenticatedRequest, res: R
 
     const residents = await prisma.tenant.findMany({
       where: {
-        room: { branch: { userId } },
+        room: { branch: { organizationId } },
         OR: approved.map((application) => ({
           phone: application.phone,
           room: { branchId: application.branchId },
@@ -314,7 +320,7 @@ export async function getAdmissionApplications(req: AuthenticatedRequest, res: R
       const orphanDocuments = await prisma.document.findMany({
         where: { admissionApplicationId: { in: orphanIds } },
       });
-      await prisma.notification.deleteMany({ where: { userId, applicationId: { in: orphanIds } } });
+      await prisma.notification.deleteMany({ where: { organizationId, applicationId: { in: orphanIds } } });
       await prisma.admissionApplication.deleteMany({ where: { id: { in: orphanIds } } });
       await Promise.all(orphanApplications.map((application) => prisma.admissionSubmissionGuard.deleteMany({
         where: { branchId: application.branchId, phone: application.phone },
@@ -336,9 +342,9 @@ export async function getAdmissionApplications(req: AuthenticatedRequest, res: R
 // Owner endpoint: Get application details by ID
 export async function getAdmissionApplicationById(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const application = await prisma.admissionApplication.findUnique({
@@ -351,7 +357,7 @@ export async function getAdmissionApplicationById(req: AuthenticatedRequest, res
       },
     });
 
-    if (!application || application.branch.userId !== userId) {
+    if (!application || application.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Application not found' });
     }
 
@@ -365,8 +371,8 @@ export async function getAdmissionApplicationById(req: AuthenticatedRequest, res
 export async function changeAdmissionFeeStatus(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
   const { paymentStatus, paymentMethod = 'CASH' } = req.body;
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const organizationId = req.user?.organizationId;
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
   if (!['PAID', 'PENDING'].includes(paymentStatus)) {
     return res.status(400).json({ error: 'Payment status must be PAID or PENDING.' });
   }
@@ -376,7 +382,7 @@ export async function changeAdmissionFeeStatus(req: AuthenticatedRequest, res: R
       where: { id },
       include: { branch: true, payments: true },
     });
-    if (!application || application.branch.userId !== userId) {
+    if (!application || application.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Application not found' });
     }
     let payment = application.payments.find((item) => item.paymentType === 'ADMISSION');
@@ -394,6 +400,7 @@ export async function changeAdmissionFeeStatus(req: AuthenticatedRequest, res: R
           status: 'PENDING',
           paymentType: 'ADMISSION',
           dueDate: application.createdAt,
+          organizationId,
           admissionApplicationId: application.id,
           branchId: application.branchId,
         },
@@ -419,7 +426,7 @@ export async function changeAdmissionFeeStatus(req: AuthenticatedRequest, res: R
         title: 'Joining Fee Marked Paid',
         message: `Joining fee of ₹${payment.amount} was marked as received from ${application.name}.`,
         type: 'ADMISSION_PAYMENT_RECEIVED',
-        userId,
+        organizationId,
         branchId: application.branchId,
         applicationId: id,
         paymentId: payment.id,
@@ -441,6 +448,7 @@ export async function changeAdmissionFeeStatus(req: AuthenticatedRequest, res: R
       });
     }
 
+    await writeAuditLog(req, { action: 'ADMISSION_FEE_STATUS_CHANGED', entityType: 'Payment', entityId: payment.id, metadata: { paymentStatus } });
     res.json({ message: paymentStatus === 'PAID' ? 'Joining fee marked as paid.' : 'Joining fee marked as not paid.' });
   } catch (error) {
     console.error('Change joining fee status error:', error);
@@ -450,15 +458,15 @@ export async function changeAdmissionFeeStatus(req: AuthenticatedRequest, res: R
 
 export async function deleteAdmissionApplication(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const organizationId = req.user?.organizationId;
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const application = await prisma.admissionApplication.findUnique({
       where: { id },
       include: { branch: true, booking: true, documents: true },
     });
-    if (!application || application.branch.userId !== userId) {
+    if (!application || application.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Application not found' });
     }
     const linkedTenant = application.status === 'APPROVED'
@@ -473,7 +481,7 @@ export async function deleteAdmissionApplication(req: AuthenticatedRequest, res:
     ].filter((roomId): roomId is string => !!roomId))];
     await prisma.notification.deleteMany({
       where: {
-        userId,
+        organizationId,
         OR: [
           { applicationId: id },
           ...(linkedTenant ? [{ tenantId: linkedTenant.id }] : []),
@@ -499,6 +507,7 @@ export async function deleteAdmissionApplication(req: AuthenticatedRequest, res:
         where: { branchId_phone: { branchId: application.branchId, phone: application.phone } },
         update: { applicationId: remainingApplication.id },
         create: {
+          organizationId,
           branchId: application.branchId,
           phone: application.phone,
           applicationId: remainingApplication.id,
@@ -515,6 +524,7 @@ export async function deleteAdmissionApplication(req: AuthenticatedRequest, res:
     for (const result of cleanupResults) {
       if (result.status === 'rejected') console.error('Admission document cleanup error:', result.reason);
     }
+    await writeAuditLog(req, { action: 'ADMISSION_DELETED', entityType: 'AdmissionApplication', entityId: id, metadata: { status: application.status } });
 
     res.json({
       message: linkedTenant
@@ -531,10 +541,10 @@ export async function deleteAdmissionApplication(req: AuthenticatedRequest, res:
 export async function reviewApplication(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
   const { status, roomId } = req.body; // status: APPROVED or REJECTED
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
   let reviewClaimed = false;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   if (status !== 'APPROVED' && status !== 'REJECTED') {
     return res.status(400).json({ error: 'Invalid status. Must be APPROVED or REJECTED.' });
@@ -551,7 +561,7 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
       },
     });
 
-    if (!application || application.branch.userId !== userId) {
+    if (!application || application.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Application not found' });
     }
 
@@ -620,6 +630,7 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
           profilePhotoUrl: application.profilePhotoUrl,
           aadhaarFrontUrl: application.aadhaarFrontUrl,
           aadhaarBackUrl: application.aadhaarBackUrl,
+          organizationId,
           roomId: selectedRoomId,
         },
       });
@@ -654,6 +665,7 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
       let rentInvoiceCreated = false;
       try {
         const rentInvoice = await ensureCurrentMonthRentInvoice({
+          organizationId,
           tenantId: tenant.id,
           branchId: room.branchId,
           monthlyRent: room.monthlyRent,
@@ -669,7 +681,7 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
         title: 'Admission Approved',
         message: `${application.name} was admitted to Room ${room.roomNumber}.`,
         type: 'ADMISSION_APPROVED',
-        userId,
+        organizationId,
         branchId: application.branchId,
         tenantId: tenant.id,
         applicationId: id,
@@ -698,7 +710,7 @@ export async function reviewApplication(req: AuthenticatedRequest, res: Response
         title: 'Admission Not Accepted',
         message: `${application.name}'s admission request was not accepted.`,
         type: 'ADMISSION_APPROVED',
-        userId,
+        organizationId,
         branchId: application.branchId,
         applicationId: id,
       });

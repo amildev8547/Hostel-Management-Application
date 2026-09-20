@@ -1,5 +1,17 @@
 # HostelHub Multi-User SaaS Development Plan
 
+## Local implementation status
+
+The implementation is active on the local `feature/multi-tenant-saas` branch. No deployment or APK build is part of this stage.
+
+- Organization ownership, strict JWT authentication, rotating refresh sessions, password changes, session revocation, rate limiting, production configuration checks, audit logs, and Super Admin APIs are implemented.
+- Existing business controllers and public admission/payment flows are scoped to an active organization.
+- The legacy-owner migration, Super Admin bootstrap/recovery commands, and a multi-tenant development seed are implemented.
+- Mobile login, secure token restore/refresh, forced temporary-password change, profile/password/session settings, logout cache clearing, and role-specific navigation are implemented.
+- Super Admin dashboard, organization creation/detail/status/plan/limit controls, administrator create/reset/suspend controls, and audit activity screens are implemented.
+- A disposable MongoDB integration test verifies migration preservation, role separation, Organization A/B isolation, limits, temporary credentials, and suspension.
+- Production database-copy migration checks, installed-client upgrade verification, deployment, and APK generation remain intentionally pending until local review is approved.
+
 ## 1. Goal and recommended account model
 
 HostelHub should become one shared SaaS platform with two primary roles:
@@ -41,7 +53,7 @@ Add `BRANCH_MANAGER` only if a customer needs staff who can access selected bran
 
 Keeping resident personal data out of normal Super Admin screens reduces privacy exposure. A future support-access feature should be explicit, temporary, visible, and audited.
 
-## 2. Current application status
+## 2. Baseline application status before this implementation
 
 ### What already helps the migration
 
@@ -53,9 +65,9 @@ Keeping resident personal data out of normal Super Admin screens reduces privacy
 - Password hashing and JWT libraries are installed.
 - Public admission links and secure form tokens are already branch-specific.
 
-### Current blockers and risks
+### Blockers and risks identified at planning time
 
-The application is still running in single-owner mode even though `FEATURES.md` describes a complete authentication system.
+Before this branch was implemented, the application ran in single-owner mode even though `FEATURES.md` described a complete authentication system. The local implementation status above records which of these issues have now been addressed.
 
 - The backend accepts a missing or invalid JWT and silently loads one configured owner.
 - The backend contains fallback credentials and a fallback JWT secret.

@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { deleteNotification, getNotifications, markAsRead, registerPushToken } from '../controllers/notificationController';
-import { authenticateJWT } from '../middlewares/auth';
+import { authenticateJWT, requireOrganization } from '../middlewares/auth';
 
 const router = Router();
 
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireOrganization);
 
 router.get('/', getNotifications);
 router.post('/push-token', registerPushToken);

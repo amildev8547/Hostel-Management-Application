@@ -7,8 +7,9 @@ const DISMISSED_ALERTS_KEY = 'dismissed_notification_alert_ids';
 
 export async function registerPushToken(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
+  const sessionId = req.user?.sessionId;
   const { token, platform = 'unknown' } = req.body;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!userId || !sessionId) return res.status(401).json({ error: 'Unauthorized' });
   if (typeof token !== 'string' || !/^Expo(nent)?PushToken\[[^\]]+\]$/.test(token)) {
     return res.status(400).json({ error: 'Invalid Expo push token' });
   }
@@ -16,8 +17,8 @@ export async function registerPushToken(req: AuthenticatedRequest, res: Response
   try {
     await prisma.devicePushToken.upsert({
       where: { token },
-      update: { userId, platform: String(platform), active: true },
-      create: { token, userId, platform: String(platform), active: true },
+      update: { userId, sessionId, platform: String(platform), active: true },
+      create: { token, userId, sessionId, platform: String(platform), active: true },
     });
     res.json({ message: 'Phone notifications enabled' });
   } catch (error) {
@@ -50,7 +51,7 @@ async function saveDismissedAlertIds(userId: string, ids: string[]) {
 // Computes live, point-in-time alerts (today's vacating tenants, rent due today, rent overdue).
 // These are not persisted Notification rows — they reflect current data state, so they
 // automatically disappear once the underlying condition is resolved (vacated / paid).
-async function getLiveAlerts(userId: string) {
+async function getLiveAlerts(organizationId: string) {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
@@ -60,13 +61,13 @@ async function getLiveAlerts(userId: string) {
       where: {
         status: 'ACTIVE',
         leavingDate: { gte: startOfToday, lt: endOfToday },
-        room: { branch: { userId } },
+        room: { branch: { organizationId } },
       },
       include: { room: { include: { branch: true } } },
     }),
     prisma.payment.findMany({
       where: {
-        branch: { userId },
+        branch: { organizationId },
         paymentType: 'RENT',
         status: 'PENDING',
         dueDate: { gte: startOfToday, lt: endOfToday },
@@ -75,7 +76,7 @@ async function getLiveAlerts(userId: string) {
     }),
     prisma.payment.findMany({
       where: {
-        branch: { userId },
+        branch: { organizationId },
         paymentType: 'RENT',
         status: { in: ['PENDING', 'OVERDUE'] },
         dueDate: { lt: startOfToday },
@@ -128,8 +129,9 @@ async function getLiveAlerts(userId: string) {
 
 export async function getNotifications(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!userId || !organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const alertsSetting = await prisma.setting.findFirst({
@@ -151,7 +153,7 @@ export async function getNotifications(req: AuthenticatedRequest, res: Response)
       prisma.notification.count({
         where: { userId, isRead: false },
       }),
-      getLiveAlerts(userId),
+      getLiveAlerts(organizationId),
       getDismissedAlertIds(userId),
     ]);
 
@@ -170,13 +172,14 @@ export async function getNotifications(req: AuthenticatedRequest, res: Response)
 
 export async function markAsRead(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
   const { id } = req.params;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!userId || !organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     if (id === 'all') {
-      const [liveAlerts, dismissedIds] = await Promise.all([getLiveAlerts(userId), getDismissedAlertIds(userId)]);
+      const [liveAlerts, dismissedIds] = await Promise.all([getLiveAlerts(organizationId), getDismissedAlertIds(userId)]);
       await Promise.all([
         prisma.notification.updateMany({ where: { userId, isRead: false }, data: { isRead: true } }),
         saveDismissedAlertIds(userId, [...dismissedIds, ...liveAlerts.map((alert) => alert.id)]),

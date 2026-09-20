@@ -7,7 +7,7 @@ import {
   changeAdmissionFeeStatus,
   deleteAdmissionApplication,
 } from '../controllers/admissionController';
-import { authenticateJWT } from '../middlewares/auth';
+import { authenticateJWT, requireOrganization } from '../middlewares/auth';
 import { admissionFeeStatusSchema, validate, publicAdmissionFormSchema } from '../middlewares/validation';
 
 const router = Router();
@@ -36,10 +36,11 @@ export function limitPublicAdmissionSubmissions(req: Request, res: Response, nex
 router.post('/apply', validate(publicAdmissionFormSchema), submitAdmissionApplication);
 
 // Owner-protected endpoints
-router.get('/', authenticateJWT, getAdmissionApplications);
-router.get('/:id', authenticateJWT, getAdmissionApplicationById);
-router.patch('/:id/fee-status', authenticateJWT, validate(admissionFeeStatusSchema), changeAdmissionFeeStatus);
-router.post('/:id/review', authenticateJWT, reviewApplication);
-router.delete('/:id', authenticateJWT, deleteAdmissionApplication);
+router.use(authenticateJWT, requireOrganization);
+router.get('/', getAdmissionApplications);
+router.get('/:id', getAdmissionApplicationById);
+router.patch('/:id/fee-status', validate(admissionFeeStatusSchema), changeAdmissionFeeStatus);
+router.post('/:id/review', reviewApplication);
+router.delete('/:id', deleteAdmissionApplication);
 
 export default router;

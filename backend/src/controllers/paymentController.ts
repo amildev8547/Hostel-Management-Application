@@ -4,12 +4,13 @@ import prisma from '../config/db';
 import { buildUpiPaymentUrl, getSettingValue } from '../utils/upi';
 import { ensureCurrentMonthRentInvoicesForOwner, getCalendarMonthRange, markOverdueRentInvoices, syncCurrentMonthRentDueDates } from '../utils/rentBilling';
 import { createOwnerNotification } from '../services/notifications';
+import { writeAuditLog } from '../services/audit';
 
 export async function getPayments(req: AuthenticatedRequest, res: Response) {
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
   const { branchId, status, paymentType, search, month, year } = req.query;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   // Restrict to invoices due within a specific calendar month (1-12) / year, so the
   // owner can review collections for any past or future month, not just the current one.
@@ -31,16 +32,16 @@ export async function getPayments(req: AuthenticatedRequest, res: Response) {
     const isCurrentMonth = requestedMonth === now.getMonth() + 1 && requestedYear === now.getFullYear();
     if (isCurrentMonth && (!paymentType || paymentType === 'RENT')) {
       await ensureCurrentMonthRentInvoicesForOwner({
-        userId,
+        organizationId,
         branchId: branchId ? String(branchId) : undefined,
         now,
       });
     }
-    await syncCurrentMonthRentDueDates({ userId });
-    await markOverdueRentInvoices(userId);
+    await syncCurrentMonthRentDueDates({ organizationId });
+    await markOverdueRentInvoices(organizationId);
     const payments = await prisma.payment.findMany({
       where: {
-        branch: { userId },
+        branch: { organizationId },
         ...(branchId ? { branchId: branchId as string } : {}),
         ...(status ? { status: status as string } : {}),
         ...(paymentType ? { paymentType: paymentType as string } : {}),
@@ -73,15 +74,15 @@ export async function getPayments(req: AuthenticatedRequest, res: Response) {
 
 // Generate rent invoices automatically for all active tenants for the current month
 export async function generateMonthlyRentDues(req: AuthenticatedRequest, res: Response) {
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const now = new Date();
     const { label: currentMonthLabel } = getCalendarMonthRange(now);
 
-    const { generatedCount, skippedTenants } = await ensureCurrentMonthRentInvoicesForOwner({ userId, now });
+    const { generatedCount, skippedTenants } = await ensureCurrentMonthRentInvoicesForOwner({ organizationId, now });
 
     res.json({
       message: `${currentMonthLabel} advance rent bills are ready. Created ${generatedCount}; already available for ${skippedTenants.length}.`,
@@ -99,9 +100,9 @@ export async function generateMonthlyRentDues(req: AuthenticatedRequest, res: Re
 export async function customizePaymentAmount(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
   const { days, discountAmount = 0 } = req.body;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const payment = await prisma.payment.findUnique({
@@ -112,7 +113,7 @@ export async function customizePaymentAmount(req: AuthenticatedRequest, res: Res
       },
     });
 
-    if (!payment || payment.branch.userId !== userId) {
+    if (!payment || payment.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Payment record not found' });
     }
 
@@ -133,6 +134,8 @@ export async function customizePaymentAmount(req: AuthenticatedRequest, res: Res
       data: { amount, originalAmount, discountAmount, daysBilled: days },
     });
 
+    await writeAuditLog(req, { action: 'PAYMENT_AMOUNT_CUSTOMIZED', entityType: 'Payment', entityId: id, metadata: { previousAmount: payment.amount, amount, days, discountAmount } });
+
     res.json(updated);
   } catch (error) {
     console.error('Customize payment error:', error);
@@ -144,9 +147,9 @@ export async function customizePaymentAmount(req: AuthenticatedRequest, res: Res
 export async function editPaymentAmount(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
   const { amount } = req.body;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   if (typeof amount !== 'number' || amount <= 0) {
     return res.status(400).json({ error: 'Amount must be a positive number' });
@@ -158,7 +161,7 @@ export async function editPaymentAmount(req: AuthenticatedRequest, res: Response
       include: { branch: true },
     });
 
-    if (!payment || payment.branch.userId !== userId) {
+    if (!payment || payment.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Payment record not found' });
     }
 
@@ -171,6 +174,8 @@ export async function editPaymentAmount(req: AuthenticatedRequest, res: Response
       data: { amount },
     });
 
+    await writeAuditLog(req, { action: 'PAYMENT_AMOUNT_EDITED', entityType: 'Payment', entityId: id, metadata: { previousAmount: payment.amount, amount } });
+
     res.json(updated);
   } catch (error) {
     console.error('Edit payment amount error:', error);
@@ -181,9 +186,9 @@ export async function editPaymentAmount(req: AuthenticatedRequest, res: Response
 // Return the manual UPI payment page for a specific invoice.
 export async function getManualPaymentLink(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const payment = await prisma.payment.findUnique({
@@ -193,15 +198,15 @@ export async function getManualPaymentLink(req: AuthenticatedRequest, res: Respo
         admissionApplication: true,
         branch: {
           include: {
-            user: {
-              include: { settings: true },
+            organization: {
+              include: { settings: { where: { userId: null } } },
             },
           },
         },
       },
     });
 
-    if (!payment || payment.branch.userId !== userId) {
+    if (!payment || payment.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Payment record not found' });
     }
 
@@ -211,8 +216,8 @@ export async function getManualPaymentLink(req: AuthenticatedRequest, res: Respo
 
     const manualPaymentUrl = `${process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`}/pay/${payment.id}`;
     const upiPaymentUrl = buildUpiPaymentUrl({
-      upiId: getSettingValue(payment.branch.user.settings, 'payment_upi_id'),
-      receiverName: getSettingValue(payment.branch.user.settings, 'payment_receiver_name') || payment.branch.user.name || payment.branch.name,
+      upiId: getSettingValue(payment.branch.organization?.settings, 'payment_upi_id'),
+      receiverName: getSettingValue(payment.branch.organization?.settings, 'payment_receiver_name') || payment.branch.organization?.name || payment.branch.name,
       amount: payment.amount,
       note: `HostelHub ${payment.paymentType} ${payment.id}`,
     });
@@ -240,9 +245,9 @@ export async function getManualPaymentLink(req: AuthenticatedRequest, res: Respo
 // Simulate sending reminder via console logging & return string template
 export async function sendPaymentReminder(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const payment = await prisma.payment.findUnique({
@@ -253,7 +258,7 @@ export async function sendPaymentReminder(req: AuthenticatedRequest, res: Respon
       },
     });
 
-    if (!payment || !payment.tenant || payment.branch.userId !== userId) {
+    if (!payment || !payment.tenant || payment.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Payment or Tenant record not found' });
     }
 
@@ -329,7 +334,7 @@ export async function processPaymentSuccess(paymentId: string, transactionId: st
       title: 'Rent Payment Received',
       message: `Advance rent of ₹${payment.amount} for ${payment.dueDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} received from ${payment.tenant?.name} (Room ${payment.tenant?.room.roomNumber}).`,
       type: 'RENT_PAYMENT_RECEIVED',
-      userId: payment.branch.userId,
+      organizationId: payment.organizationId || payment.branch.organizationId!,
       branchId: payment.branchId,
       tenantId: payment.tenantId,
       paymentId,
@@ -351,7 +356,7 @@ export async function processPaymentSuccess(paymentId: string, transactionId: st
       title: 'Joining Fee Paid',
       message: `Joining fee of ₹${payment.amount} received from ${payment.admissionApplication?.name}.`,
       type: 'ADMISSION_PAYMENT_RECEIVED',
-      userId: payment.branch.userId,
+      organizationId: payment.organizationId || payment.branch.organizationId!,
       branchId: payment.branchId,
       applicationId: payment.admissionApplicationId,
       paymentId,
@@ -365,9 +370,9 @@ export async function processPaymentSuccess(paymentId: string, transactionId: st
 export async function recordManualPayment(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
   const { paymentMethod, transactionId } = req.body;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const payment = await prisma.payment.findUnique({
@@ -375,7 +380,7 @@ export async function recordManualPayment(req: AuthenticatedRequest, res: Respon
       include: { branch: true },
     });
 
-    if (!payment || payment.branch.userId !== userId) {
+    if (!payment || payment.branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Payment record not found' });
     }
 
@@ -385,6 +390,7 @@ export async function recordManualPayment(req: AuthenticatedRequest, res: Respon
 
     const mockTxnId = transactionId || `manual_${Math.random().toString(36).substring(2, 10)}`;
     const result = await processPaymentSuccess(id, mockTxnId, paymentMethod || 'CASH');
+    await writeAuditLog(req, { action: 'PAYMENT_MARKED_PAID', entityType: 'Payment', entityId: id, metadata: { paymentMethod: paymentMethod || 'CASH' } });
 
     res.json({
       message: 'Payment recorded manually successfully',

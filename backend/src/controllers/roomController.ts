@@ -5,9 +5,9 @@ import { updateRoomOccupancyStatus } from '../utils/occupancy';
 
 export async function createRoom(req: AuthenticatedRequest, res: Response) {
   const { branchId, roomNumber, floor, roomType, capacity, monthlyRent, admissionFee } = req.body;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     // Confirm branch belongs to owner
@@ -15,8 +15,17 @@ export async function createRoom(req: AuthenticatedRequest, res: Response) {
       where: { id: branchId },
     });
 
-    if (!branch || branch.userId !== userId) {
+    if (!branch || branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Branch not found or unauthorized' });
+    }
+
+    const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { maxBeds: true } });
+    if (organization?.maxBeds) {
+      const rooms = await prisma.room.findMany({ where: { organizationId }, select: { capacity: true } });
+      const currentBeds = rooms.reduce((total, item) => total + item.capacity, 0);
+      if (currentBeds + capacity > organization.maxBeds) {
+        return res.status(409).json({ error: `This account can have up to ${organization.maxBeds} beds.` });
+      }
     }
 
     const room = await prisma.room.create({
@@ -28,6 +37,7 @@ export async function createRoom(req: AuthenticatedRequest, res: Response) {
         monthlyRent,
         admissionFee,
         status: 'AVAILABLE',
+        organizationId,
         branchId,
       },
     });
@@ -41,9 +51,9 @@ export async function createRoom(req: AuthenticatedRequest, res: Response) {
 
 export async function getRooms(req: AuthenticatedRequest, res: Response) {
   const { branchId } = req.query;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
   if (!branchId) return res.status(400).json({ error: 'branchId is required' });
 
   try {
@@ -52,7 +62,7 @@ export async function getRooms(req: AuthenticatedRequest, res: Response) {
       where: { id: branchId as string },
     });
 
-    if (!branch || branch.userId !== userId) {
+    if (!branch || branch.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Branch not found or unauthorized' });
     }
 
@@ -93,9 +103,9 @@ export async function getRooms(req: AuthenticatedRequest, res: Response) {
 
 export async function getRoomById(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const room = await prisma.room.findUnique({
@@ -109,7 +119,7 @@ export async function getRoomById(req: AuthenticatedRequest, res: Response) {
       },
     });
 
-    if (!room || room.branch.userId !== userId) {
+    if (!room || room.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Room not found' });
     }
 
@@ -144,9 +154,9 @@ export async function getRoomById(req: AuthenticatedRequest, res: Response) {
 export async function updateRoom(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
   const { roomNumber, floor, roomType, capacity, monthlyRent, admissionFee } = req.body;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const room = await prisma.room.findUnique({
@@ -158,13 +168,23 @@ export async function updateRoom(req: AuthenticatedRequest, res: Response) {
       },
     });
 
-    if (!room || room.branch.userId !== userId) {
+    if (!room || room.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Room not found' });
     }
 
     const reservedBeds = room.bookings.filter((booking) => booking.status !== 'OCCUPIED').length;
     if (capacity < room.tenants.length + reservedBeds) {
       return res.status(400).json({ error: 'The number of beds cannot be lower than the places already occupied or reserved.' });
+    }
+    if (capacity > room.capacity) {
+      const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { maxBeds: true } });
+      if (organization?.maxBeds) {
+        const rooms = await prisma.room.findMany({ where: { organizationId }, select: { capacity: true } });
+        const currentBeds = rooms.reduce((total, item) => total + item.capacity, 0);
+        if (currentBeds - room.capacity + capacity > organization.maxBeds) {
+          return res.status(409).json({ error: `This account can have up to ${organization.maxBeds} beds.` });
+        }
+      }
     }
 
     const updated = await prisma.room.update({
@@ -191,9 +211,9 @@ export async function updateRoom(req: AuthenticatedRequest, res: Response) {
 
 export async function deleteRoom(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const room = await prisma.room.findUnique({
@@ -201,7 +221,7 @@ export async function deleteRoom(req: AuthenticatedRequest, res: Response) {
       include: { branch: true },
     });
 
-    if (!room || room.branch.userId !== userId) {
+    if (!room || room.organizationId !== organizationId) {
       return res.status(404).json({ error: 'Room not found' });
     }
 

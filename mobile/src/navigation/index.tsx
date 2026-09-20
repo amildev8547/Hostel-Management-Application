@@ -3,12 +3,13 @@ import { createNavigationContainerRef, NavigationContainer, NavigatorScreenParam
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { Text } from 'react-native-paper';
+import { ActivityIndicator, Text } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../services/api';
 import { applyLocalNotificationState } from '../services/storage';
 import { registerForPushNotifications } from '../services/pushNotifications';
+import { useAuth } from '../services/AuthContext';
 import * as Notifications from 'expo-notifications';
 
 // Screens
@@ -30,9 +31,25 @@ import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import BookingListScreen from '../screens/bookings/BookingListScreen';
 import BookingFormScreen from '../screens/bookings/BookingFormScreen';
 import ExistingTenantFormScreen from '../screens/tenants/ExistingTenantFormScreen';
+import LoginScreen from '../screens/auth/LoginScreen';
+import ChangePasswordScreen from '../screens/auth/ChangePasswordScreen';
+import SuperAdminDashboardScreen from '../screens/superAdmin/SuperAdminDashboardScreen';
+import OrganizationFormScreen from '../screens/superAdmin/OrganizationFormScreen';
+import OrganizationDetailScreen from '../screens/superAdmin/OrganizationDetailScreen';
+import AccountProfileScreen from '../screens/auth/AccountProfileScreen';
+import AuditLogScreen from '../screens/superAdmin/AuditLogScreen';
+import SessionsScreen from '../screens/auth/SessionsScreen';
 
 // Stack Navigation Type Definitions
 export type RootStackParamList = {
+  Login: undefined;
+  ChangePassword: undefined;
+  SuperAdminDashboard: undefined;
+  OrganizationForm: undefined;
+  OrganizationDetail: { organizationId: string };
+  AccountProfile: undefined;
+  AuditLog: undefined;
+  Sessions: undefined;
   Main: NavigatorScreenParams<TabParamList> | undefined;
   BranchDashboard: { branchId: string; branchName: string };
   QRCode: { branchId: string; branchName: string };
@@ -161,7 +178,9 @@ function TabNavigator() {
 // Global App Navigation Container
 export default function AppNavigator() {
   const queryClient = useQueryClient();
+  const { user, isLoading } = useAuth();
   React.useEffect(() => {
+    if (user?.role !== 'HOSTEL_ADMIN') return;
     void registerForPushNotifications();
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
       openPushNotification(response.notification.request.content.data as Record<string, any>);
@@ -179,7 +198,8 @@ export default function AppNavigator() {
       responseSubscription.remove();
       receivedSubscription.remove();
     };
-  }, [queryClient]);
+  }, [queryClient, user?.role]);
+  if (isLoading) return <LoadingScreen />;
   return (
     <NavigationContainer
       ref={navigationRef}
@@ -189,27 +209,54 @@ export default function AppNavigator() {
       onStateChange={() => void queryClient.refetchQueries({ type: 'active', stale: true })}
     >
       <RootStack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#FFFFFF' }, headerTitleStyle: { fontWeight: '600' } }}>
-        <RootStack.Screen name="Main" component={TabNavigator} options={{ headerShown: false }} />
-        <RootStack.Screen name="BranchDashboard" component={BranchDashboardScreen} options={({ route }) => ({ title: route.params.branchName })} />
-        <RootStack.Screen name="QRCode" component={QRCodeScreen} options={{ title: 'Application QR Code' }} />
-        <RootStack.Screen name="BranchForm" component={BranchFormScreen} options={{ title: 'Hostel Branch Details' }} />
-        <RootStack.Screen name="RoomDetails" component={RoomDetailsScreen} options={{ title: 'Room Details' }} />
-        <RootStack.Screen name="RoomForm" component={RoomFormScreen} options={{ title: 'Room Details' }} />
-        <RootStack.Screen name="TenantProfile" component={TenantProfileScreen} options={{ title: 'Resident Details' }} />
-        <RootStack.Screen name="MoveTenant" component={MoveTenantScreen} options={{ title: 'Move to Another Room' }} />
-        <RootStack.Screen name="AdmissionReview" component={AdmissionReviewScreen} options={{ title: 'Check Application' }} />
-        <RootStack.Screen name="PaymentsDashboard" component={PaymentsDashboardScreen} options={{ title: 'Rent Payments' }} />
-        <RootStack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
-        <RootStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
-        <RootStack.Screen name="BookingList" component={BookingListScreen} options={{ title: 'Bed Bookings' }} />
-        <RootStack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Book a Bed' }} />
-        <RootStack.Screen name="ExistingTenantForm" component={ExistingTenantFormScreen} options={({ route }) => ({ title: route.params?.tenantId ? 'Edit Resident' : 'Add Resident' })} />
+        {!user ? (
+          <RootStack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+        ) : user.mustChangePassword ? (
+          <RootStack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ headerShown: false }} />
+        ) : user.role === 'SUPER_ADMIN' ? (
+          <>
+            <RootStack.Screen name="SuperAdminDashboard" component={SuperAdminDashboardScreen} options={{ headerShown: false }} />
+            <RootStack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Change Password' }} />
+            <RootStack.Screen name="AccountProfile" component={AccountProfileScreen} options={{ title: 'Account Details' }} />
+            <RootStack.Screen name="AuditLog" component={AuditLogScreen} options={{ title: 'Admin Activity' }} />
+            <RootStack.Screen name="Sessions" component={SessionsScreen} options={{ title: 'Active Sessions' }} />
+            <RootStack.Screen name="OrganizationForm" component={OrganizationFormScreen} options={{ title: 'New Hostel Account' }} />
+            <RootStack.Screen name="OrganizationDetail" component={OrganizationDetailScreen} options={{ title: 'Hostel Account' }} />
+          </>
+        ) : (
+          <>
+            <RootStack.Screen name="Main" component={TabNavigator} options={{ headerShown: false }} />
+            <RootStack.Screen name="BranchDashboard" component={BranchDashboardScreen} options={({ route }) => ({ title: route.params.branchName })} />
+            <RootStack.Screen name="QRCode" component={QRCodeScreen} options={{ title: 'Application QR Code' }} />
+            <RootStack.Screen name="BranchForm" component={BranchFormScreen} options={{ title: 'Hostel Branch Details' }} />
+            <RootStack.Screen name="RoomDetails" component={RoomDetailsScreen} options={{ title: 'Room Details' }} />
+            <RootStack.Screen name="RoomForm" component={RoomFormScreen} options={{ title: 'Room Details' }} />
+            <RootStack.Screen name="TenantProfile" component={TenantProfileScreen} options={{ title: 'Resident Details' }} />
+            <RootStack.Screen name="MoveTenant" component={MoveTenantScreen} options={{ title: 'Move to Another Room' }} />
+            <RootStack.Screen name="AdmissionReview" component={AdmissionReviewScreen} options={{ title: 'Check Application' }} />
+            <RootStack.Screen name="PaymentsDashboard" component={PaymentsDashboardScreen} options={{ title: 'Rent Payments' }} />
+            <RootStack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
+            <RootStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+            <RootStack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Change Password' }} />
+            <RootStack.Screen name="AccountProfile" component={AccountProfileScreen} options={{ title: 'Account Details' }} />
+            <RootStack.Screen name="Sessions" component={SessionsScreen} options={{ title: 'Active Sessions' }} />
+            <RootStack.Screen name="BookingList" component={BookingListScreen} options={{ title: 'Bed Bookings' }} />
+            <RootStack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Book a Bed' }} />
+            <RootStack.Screen name="ExistingTenantForm" component={ExistingTenantFormScreen} options={({ route }) => ({ title: route.params?.tenantId ? 'Edit Resident' : 'Add Resident' })} />
+          </>
+        )}
       </RootStack.Navigator>
     </NavigationContainer>
   );
 }
 
+function LoadingScreen() {
+  return <View style={styles.loading}><ActivityIndicator size="large" /><Text style={styles.loadingText}>Opening HostelHub…</Text></View>;
+}
+
 const styles = StyleSheet.create({
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' },
+  loadingText: { marginTop: 14, color: '#64748B' },
   tabBar: {
     height: 78,
     paddingTop: 8,

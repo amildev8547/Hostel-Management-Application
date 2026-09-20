@@ -1,6 +1,6 @@
 # HostelHub V1 - Hostel Branch & Occupancy Management System
 
-HostelHub is a production-ready multi-branch hostel management application designed exclusively for hostel owners to oversee properties, track room vacancies, automate rent billing, review admission files, and capture Razorpay transaction webhooks.
+HostelHub is a multi-tenant hostel management application. A platform Super Admin creates and controls customer hostel accounts, while each Hostel Admin can access only their own organization's branches, rooms, residents, admissions, bookings, payments, settings, and notifications.
 
 This codebase is split into two primary components:
 1. **`backend/`**: A Node.js, Express, TypeScript, and Prisma backend configured to run with **MongoDB** and **Cloudinary**.
@@ -13,7 +13,7 @@ This codebase is split into two primary components:
 - Reserved beds are excluded from availability and protected from another booking, admission, or room move.
 - Approval converts the booking to an occupied bed. Cancellation or rejection releases it.
 - Public forms use an expiring one-time submission token. A branch/phone pair cannot submit twice unless the owner deletes the incorrect application first.
-- The backend start command applies the Prisma schema before starting so Render creates the MongoDB booking collection and unique bed lock.
+- Schema synchronization and data migration are explicit commands. Normal server startup never changes the production database schema.
 
 ---
 
@@ -28,7 +28,7 @@ hostel-management-app/
 │   ├── src/
 │   │   ├── config/             # DB client configurations
   │   │   ├── controllers/        # Route logic handlers (Branch, Rent, etc.)
-  │   │   ├── middlewares/        # Single-owner resolver, Zod body/query validation
+  │   │   ├── middlewares/        # JWT authorization, role checks, and validation
 │   │   ├── routes/             # Express route registers
 │   │   ├── services/           # Cloudinary SDK, Razorpay hooks integration
 │   │   ├── utils/              # Bed occupancy calculators
@@ -56,7 +56,12 @@ Configure the following variables in your local `backend/.env` file:
 ```env
 PORT=5000
 DATABASE_URL="mongodb://localhost:27017/hostelhub" # Local standalone or Atlas connection URL
-JWT_SECRET="your-super-secret-jwt-key"
+JWT_ACCESS_SECRET="replace-with-at-least-32-random-characters"
+SUPER_ADMIN_EMAIL="admin@example.com"
+SUPER_ADMIN_NAME="HostelHub Super Admin"
+SUPER_ADMIN_PASSWORD="replace-with-a-strong-bootstrap-password"
+SEED_HOSTEL_ADMIN_PASSWORD="replace-with-a-strong-local-seed-password"
+ALLOWED_ORIGINS="http://localhost:8081,http://localhost:19006"
 
 # Cloudinary Storage Configuration
 CLOUDINARY_CLOUD_NAME="your-cloudinary-cloud-name"
@@ -92,7 +97,11 @@ BACKEND_URL="http://localhost:5000"
    npm run prisma:seed
    ```
 
-The seed script creates a single owner record for branch, room, tenant, and payment ownership.
+The development seed is destructive and refuses to run when `NODE_ENV=production`. It creates a Super Admin plus one isolated demo hostel organization and Hostel Admin. For an existing database, run `npm run migrate:organizations` after syncing the schema; the idempotent script creates organizations for legacy owners, backfills organization IDs, bootstraps the Super Admin, and verifies that business records were assigned.
+
+Run `npm run test:isolation` in `backend/` to start a disposable MongoDB replica set and verify legacy migration, role boundaries, cross-organization isolation, account limits, temporary-password enforcement, and immediate suspension. The test never connects to the configured live database.
+
+For a complete local demo without configuring MongoDB or editing `.env`, run `npm run dev:sandbox` in `backend/`. It builds the API, starts a disposable database, loads one Super Admin and one demo hostel, and prints both login credentials. Keep that terminal open while running the mobile app. The data is deleted when you stop the command with Ctrl+C, and the command never connects to the live database.
 
 ---
 
@@ -101,7 +110,7 @@ The seed script creates a single owner record for branch, room, tenant, and paym
 All API endpoints are prefixed with `/api`.
 
 > [!NOTE]
-> This installation is configured for **single-owner mode**. The mobile app opens directly to the dashboard, and protected backend routes automatically use the first owner account in the database. If no owner exists, the backend creates one with `owner@hostelhub.com`.
+> Every protected API requires an access token. Hostel routes derive the organization from the authenticated session and reject Super Admin accounts. Platform routes under `/api/super-admin` require the `SUPER_ADMIN` role.
 
 ### 1. Branches
 - `GET /branches` - Get all branches (supports `?search=`).
@@ -164,10 +173,8 @@ All API endpoints are prefixed with `/api`.
    # Start Expo developer tool
    npm start
    ```
-3. Use the **Expo Go** application on your Android or iOS device to scan the QR code and load the app, or press `a` to boot on an Android Emulator.
-
-> [!TIP]
-> The mobile client currently points to the deployed Render backend in `mobile/src/services/api.ts`.
+3. Copy `mobile/.env.example` to `mobile/.env.local`. Use `localhost` for Expo web or an Android emulator configured to reach the host; use the computer's LAN IP when testing from a physical phone.
+4. Use the **Expo Go** application on your Android or iOS device to scan the QR code and load the app, or press `a` to boot on an Android Emulator.
 
 ---
 

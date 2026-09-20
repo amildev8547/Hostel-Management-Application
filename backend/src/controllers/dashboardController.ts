@@ -23,12 +23,12 @@ export function buildResidentMovementHistory(now: Date, joinedDates: Date[], lea
 }
 
 export async function getHomeDashboard(req: AuthenticatedRequest, res: Response) {
-  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
   const now = new Date();
   const activityMonth = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
   const activityYear = req.query.year ? Number(req.query.year) : now.getFullYear();
 
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!organizationId) return res.status(401).json({ error: 'Unauthorized' });
   if (!Number.isInteger(activityMonth) || activityMonth < 1 || activityMonth > 12 || !Number.isInteger(activityYear) || activityYear < 2000 || activityYear > 2200) {
     return res.status(400).json({ error: 'Choose a valid month and year.' });
   }
@@ -36,7 +36,7 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
   try {
     // 1. Fetch all branches owned by user
     const branches = await prisma.branch.findMany({
-      where: { userId },
+      where: { organizationId },
       include: {
         rooms: {
           include: {
@@ -74,9 +74,9 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
 
     // Rent bills are prepared automatically while the home/payment data refreshes.
     // The owner no longer needs a separate "create bills" action in the app.
-    await ensureCurrentMonthRentInvoicesForOwner({ userId, now });
-    await syncCurrentMonthRentDueDates({ userId, now });
-    await markOverdueRentInvoices(userId);
+    await ensureCurrentMonthRentInvoicesForOwner({ organizationId, now });
+    await syncCurrentMonthRentDueDates({ organizationId, now });
+    await markOverdueRentInvoices(organizationId);
     const payments = await prisma.payment.findMany({
       where: {
         branchId: { in: branchIds },
@@ -116,14 +116,14 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
       prisma.tenant.count({
         where: {
           joiningDate: { gte: activityStart, lt: activityEnd },
-          room: { branch: { userId } },
+          room: { branch: { organizationId } },
         },
       }),
       prisma.tenant.count({
         where: {
           status: 'VACATED',
           leavingDate: { gte: activityStart, lt: activityEnd },
-          room: { branch: { userId } },
+          room: { branch: { organizationId } },
         },
       }),
     ]);
@@ -137,7 +137,7 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
       prisma.tenant.findMany({
         where: {
           joiningDate: { gte: historyStart, lt: historyEnd },
-          room: { branch: { userId } },
+          room: { branch: { organizationId } },
         },
         select: { joiningDate: true },
       }),
@@ -145,7 +145,7 @@ export async function getHomeDashboard(req: AuthenticatedRequest, res: Response)
         where: {
           status: 'VACATED',
           leavingDate: { gte: historyStart, lt: historyEnd },
-          room: { branch: { userId } },
+          room: { branch: { organizationId } },
         },
         select: { leavingDate: true },
       }),

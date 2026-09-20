@@ -6,12 +6,12 @@ import {
   updateRoom,
   deleteRoom,
 } from '../controllers/roomController';
-import { authenticateJWT } from '../middlewares/auth';
+import { authenticateJWT, requireOrganization } from '../middlewares/auth';
 import { validate, roomSchema } from '../middlewares/validation';
 
 const router = Router();
 
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireOrganization);
 
 router.post('/', validate(roomSchema), createRoom);
 router.get('/', getRooms);

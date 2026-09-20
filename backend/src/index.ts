@@ -16,14 +16,29 @@ import settingRoutes from './routes/settingRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import bookingRoutes from './routes/bookingRoutes';
 import publicRoutes from './routes/publicRoutes';
+import authRoutes from './routes/authRoutes';
+import superAdminRoutes from './routes/superAdminRoutes';
 import prisma from './config/db';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 app.set('trust proxy', 1);
 
+if (process.env.NODE_ENV === 'production') {
+  const jwtSecret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || '';
+  if (jwtSecret.length < 32 || /replace|secret/i.test(jwtSecret)) throw new Error('A strong JWT_ACCESS_SECRET with at least 32 characters is required in production.');
+  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required in production.');
+  if (!process.env.ALLOWED_ORIGINS?.trim()) throw new Error('ALLOWED_ORIGINS is required in production.');
+}
+
 // Middleware
-app.use(cors());
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean);
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin) || (process.env.NODE_ENV !== 'production' && allowedOrigins.length === 0)) return callback(null, true);
+    return callback(new Error('Origin is not allowed by CORS'));
+  },
+}));
 // Block repeated public form submissions before Express spends time parsing their
 // image payloads. The normal admission router performs validation afterward.
 app.use('/api/admissions/apply', limitPublicAdmissionSubmissions);
@@ -40,6 +55,8 @@ app.use('/brand', express.static(path.join(__dirname, '../public/brand')));
 app.use('/', publicRoutes);
 
 // Mount API routes
+app.use('/api/auth', authRoutes);
+app.use('/api/super-admin', superAdminRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/admissions', admissionRoutes);

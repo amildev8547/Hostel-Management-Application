@@ -7,20 +7,63 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model User {
-  id            String            @id @default(auto()) @map("_id") @db.ObjectId
-  email         String            @unique
-  password      String
-  name          String
-  role          String            @default("OWNER")
-  branches      Branch[]
-  notifications Notification[]
-  pushTokens    DevicePushToken[]
-  settings      Setting[]
-  bookings      Booking[]
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+model Organization {
+  id                    String                     @id @default(auto()) @map("_id") @db.ObjectId
+  name                  String
+  slug                  String                     @unique
+  status                String                     @default("ACTIVE") // ACTIVE, SUSPENDED, ARCHIVED
+  plan                  String                     @default("STANDARD") // FREE, STANDARD, PREMIUM
+  contactName           String?
+  contactPhone          String?
+  contactEmail          String?
+  maxBranches           Int?
+  maxBeds               Int?
+  trialEndsAt           DateTime?
+  createdByUserId       String?                    @db.ObjectId
+  users                 User[]
+  branches              Branch[]
+  rooms                 Room[]
+  tenants               Tenant[]
+  bookings              Booking[]
+  admissionApplications AdmissionApplication[]
+  payments              Payment[]
+  documents             Document[]
+  notifications         Notification[]
+  settings              Setting[]
+  admissionFormTokens   AdmissionFormToken[]
+  submissionGuards      AdmissionSubmissionGuard[]
+  auditLogs             AuditLog[]
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
 
+  @@index([status, createdAt])
+  @@map("organizations")
+}
+
+model User {
+  id                 String            @id @default(auto()) @map("_id") @db.ObjectId
+  email              String            @unique
+  password           String
+  name               String
+  role               String            @default("HOSTEL_ADMIN") // SUPER_ADMIN, HOSTEL_ADMIN
+  status             String            @default("ACTIVE") // ACTIVE, INVITED, SUSPENDED
+  mustChangePassword Boolean           @default(false)
+  tokenVersion       Int               @default(0)
+  lastLoginAt        DateTime?
+  passwordChangedAt  DateTime?
+  organizationId     String?           @db.ObjectId
+  organization       Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  notifications      Notification[]
+  pushTokens         DevicePushToken[]
+  settings           Setting[]
+  bookingsCreated    Booking[]         @relation("BookingCreatedBy")
+  sessions           Session[]
+  credentialTokens   CredentialToken[]
+  auditLogs          AuditLog[]        @relation("AuditActor")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([organizationId, status])
   @@map("users")
 }
 
@@ -32,8 +75,9 @@ model Branch {
   googleMapsLocation    String?
   rentDueDay            Int                        @default(5)
   status                String                     @default("ACTIVE") // ACTIVE, INACTIVE
-  userId                String                     @db.ObjectId
-  user                  User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId        String?                    @db.ObjectId
+  organization          Organization?              @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  legacyUserId          String?                    @map("userId") @db.ObjectId
   rooms                 Room[]
   admissionApplications AdmissionApplication[]
   payments              Payment[]
@@ -43,30 +87,35 @@ model Branch {
   createdAt             DateTime                   @default(now())
   updatedAt             DateTime                   @updatedAt
 
+  @@index([organizationId, status])
   @@map("branches")
 }
 
 model Room {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  roomNumber   String
-  floor        String
-  roomType     String // 2 Share, 3 Share, 4 Share, 5 Share, Custom
-  capacity     Int
-  monthlyRent  Float
-  admissionFee Float
-  status       String    @default("AVAILABLE") // AVAILABLE, PARTIAL, FULL (calculated automatically)
-  branchId     String    @db.ObjectId
-  branch       Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  tenants      Tenant[]
-  bookings     Booking[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  roomNumber     String
+  floor          String
+  roomType       String
+  capacity       Int
+  monthlyRent    Float
+  admissionFee   Float
+  status         String        @default("AVAILABLE") // AVAILABLE, PARTIAL, FULL
+  organizationId String?       @db.ObjectId
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  branchId       String        @db.ObjectId
+  branch         Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  tenants        Tenant[]
+  bookings       Booking[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
+  @@unique([branchId, roomNumber])
+  @@index([organizationId, status])
   @@map("rooms")
 }
 
 model Tenant {
-  id                   String     @id @default(auto()) @map("_id") @db.ObjectId
+  id                   String        @id @default(auto()) @map("_id") @db.ObjectId
   name                 String
   phone                String
   whatsappNumber       String
@@ -79,18 +128,22 @@ model Tenant {
   notes                String?
   joiningDate          DateTime
   leavingDate          DateTime?
-  status               String     @default("ACTIVE") // ACTIVE, VACATED
+  status               String        @default("ACTIVE") // ACTIVE, VACATED
   profilePhotoUrl      String?
   aadhaarFrontUrl      String?
   aadhaarBackUrl       String?
-  roomId               String     @db.ObjectId
-  room                 Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  organizationId       String?       @db.ObjectId
+  organization         Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  roomId               String        @db.ObjectId
+  room                 Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
   payments             Payment[]
   documents            Document[]
   booking              Booking?
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
+  @@index([organizationId, status])
+  @@index([organizationId, phone])
   @@map("tenants")
 }
 
@@ -103,8 +156,10 @@ model Booking {
   notes                  String?
   status                 String                @default("RESERVED") // RESERVED, FORM_SUBMITTED, OCCUPIED
   secureToken            String                @unique
-  userId                 String                @db.ObjectId
-  user                   User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId         String?               @db.ObjectId
+  organization           Organization?         @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  createdByUserId        String?               @map("userId") @db.ObjectId
+  createdBy              User?                 @relation("BookingCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   branchId               String                @db.ObjectId
   branch                 Branch                @relation(fields: [branchId], references: [id], onDelete: Cascade)
   roomId                 String                @db.ObjectId
@@ -117,11 +172,12 @@ model Booking {
   updatedAt              DateTime              @updatedAt
 
   @@unique([roomId, bedNumber])
+  @@index([organizationId, status])
   @@map("bookings")
 }
 
 model AdmissionApplication {
-  id                   String     @id @default(auto()) @map("_id") @db.ObjectId
+  id                   String        @id @default(auto()) @map("_id") @db.ObjectId
   name                 String
   phone                String
   whatsappNumber       String
@@ -138,17 +194,21 @@ model AdmissionApplication {
   aadhaarBackUrl       String?
   notes                String?
   preferredRoomType    String
-  status               String     @default("PENDING") // PENDING, APPROVED, REJECTED
-  paymentStatus        String     @default("PENDING") // PENDING, PAID
-  paymentId            String? // Owner-entered/manual payment reference
-  branchId             String     @db.ObjectId
-  branch               Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  status               String        @default("PENDING") // PENDING, APPROVED, REJECTED
+  paymentStatus        String        @default("PENDING") // PENDING, PAID
+  paymentId            String?
+  organizationId       String?       @db.ObjectId
+  organization         Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  branchId             String        @db.ObjectId
+  branch               Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
   payments             Payment[]
   documents            Document[]
   booking              Booking?
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
+  @@index([organizationId, status])
+  @@index([organizationId, phone])
   @@map("admission_applications")
 }
 
@@ -156,17 +216,19 @@ model Payment {
   id                     String                @id @default(auto()) @map("_id") @db.ObjectId
   amount                 Float
   status                 String                @default("PENDING") // PAID, PENDING, OVERDUE
-  paymentType            String // RENT, ADMISSION
-  daysBilled             Int? // Number of days this RENT invoice covers (for partial stays)
-  originalAmount         Float? // Prorated amount before discount was applied
+  paymentType            String
+  daysBilled             Int?
+  originalAmount         Float?
   discountAmount         Float                 @default(0)
   dueDate                DateTime
   paidDate               DateTime?
-  paymentMethod          String? // UPI, CASH, BANK
+  paymentMethod          String?
   transactionId          String?
   paymentLinkId          String?
   paymentLinkUrl         String?
   receiptUrl             String?
+  organizationId         String?               @db.ObjectId
+  organization           Organization?         @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   tenantId               String?               @db.ObjectId
   tenant                 Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   admissionApplicationId String?               @db.ObjectId
@@ -176,15 +238,18 @@ model Payment {
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
 
+  @@index([organizationId, status, dueDate])
   @@map("payments")
 }
 
 model Document {
   id                     String                @id @default(auto()) @map("_id") @db.ObjectId
   fileName               String
-  fileType               String // PROFILE_PHOTO, AADHAAR_FRONT, AADHAAR_BACK
+  fileType               String
   s3Key                  String
   s3Bucket               String
+  organizationId         String?               @db.ObjectId
+  organization           Organization?         @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   tenantId               String?               @db.ObjectId
   tenant                 Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   admissionApplicationId String?               @db.ObjectId
@@ -192,47 +257,56 @@ model Document {
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
 
+  @@index([organizationId, fileType])
   @@map("documents")
 }
 
 model Notification {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  title         String
-  message       String
-  isRead        Boolean  @default(false)
-  type          String // NEW_ADMISSION, ADMISSION_PAYMENT_RECEIVED, RENT_PAYMENT_RECEIVED, ADMISSION_APPROVED, TENANT_VACATED
-  userId        String   @db.ObjectId
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  branchId      String?  @db.ObjectId
-  tenantId      String?  @db.ObjectId
-  applicationId String?  @db.ObjectId
-  paymentId     String?  @db.ObjectId
-  createdAt     DateTime @default(now())
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  title          String
+  message        String
+  isRead         Boolean       @default(false)
+  type           String
+  organizationId String?       @db.ObjectId
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  userId         String        @db.ObjectId
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branchId       String?       @db.ObjectId
+  tenantId       String?       @db.ObjectId
+  applicationId  String?       @db.ObjectId
+  paymentId      String?       @db.ObjectId
+  createdAt      DateTime      @default(now())
 
+  @@index([organizationId, createdAt])
+  @@index([userId, isRead])
   @@map("notifications")
 }
 
 model AdmissionFormToken {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  tokenHash    String    @unique
-  branchId     String    @db.ObjectId
-  branch       Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  bookingToken String?
-  expiresAt    DateTime
-  usedAt       DateTime?
-  createdAt    DateTime  @default(now())
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  tokenHash      String        @unique
+  organizationId String?       @db.ObjectId
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  branchId       String        @db.ObjectId
+  branch         Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  bookingToken   String?
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime      @default(now())
 
   @@index([expiresAt])
   @@map("admission_form_tokens")
 }
 
 model AdmissionSubmissionGuard {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  branchId      String   @db.ObjectId
-  branch        Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  phone         String
-  applicationId String?  @db.ObjectId
-  createdAt     DateTime @default(now())
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?       @db.ObjectId
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  branchId       String        @db.ObjectId
+  branch         Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  phone          String
+  applicationId  String?       @db.ObjectId
+  createdAt      DateTime      @default(now())
 
   @@unique([branchId, phone])
   @@map("admission_submission_guards")
@@ -245,20 +319,79 @@ model DevicePushToken {
   active    Boolean  @default(true)
   userId    String   @db.ObjectId
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?  @db.ObjectId
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([sessionId, active])
   @@map("device_push_tokens")
 }
 
 model Setting {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  key       String
-  value     String
-  userId    String   @db.ObjectId
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  key            String
+  value          String
+  organizationId String?       @db.ObjectId
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  userId         String?       @db.ObjectId
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
+  @@index([organizationId, key])
+  @@index([userId, key])
   @@map("settings")
+}
+
+model Session {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  refreshTokenHash String    @unique
+  userId           String    @db.ObjectId
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform         String?
+  deviceName       String?
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  lastUsedAt       DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model CredentialToken {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  tokenHash String    @unique
+  type      String
+  userId    String    @db.ObjectId
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, type])
+  @@index([expiresAt])
+  @@map("credential_tokens")
+}
+
+model AuditLog {
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  actorUserId    String?       @db.ObjectId
+  actor          User?         @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  organizationId String?       @db.ObjectId
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  action         String
+  entityType     String?
+  entityId       String?       @db.ObjectId
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("audit_logs")
 }

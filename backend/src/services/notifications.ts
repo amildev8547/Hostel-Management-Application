@@ -1,10 +1,10 @@
 import prisma from '../config/db';
 
-type OwnerNotificationInput = {
+type OrganizationNotificationInput = {
   title: string;
   message: string;
   type: string;
-  userId: string;
+  organizationId: string;
   branchId?: string | null;
   tenantId?: string | null;
   applicationId?: string | null;
@@ -12,7 +12,7 @@ type OwnerNotificationInput = {
   notificationId?: string;
 };
 
-async function sendPushToOwner(input: OwnerNotificationInput) {
+async function sendPushToUser(input: OrganizationNotificationInput & { userId: string }) {
   const alertsSetting = await prisma.setting.findFirst({ where: { userId: input.userId, key: 'notification_alerts_enabled' } });
   if (alertsSetting?.value === 'false') return;
   const devices = await prisma.devicePushToken.findMany({ where: { userId: input.userId, active: true } });
@@ -50,9 +50,21 @@ async function sendPushToOwner(input: OwnerNotificationInput) {
   }
 }
 
-export async function createOwnerNotification(input: OwnerNotificationInput) {
-  const { notificationId: _ignored, ...notificationData } = input;
-  const notification = await prisma.notification.create({ data: notificationData });
-  void sendPushToOwner({ ...input, notificationId: notification.id }).catch((error) => console.error('Send owner push notification error:', error));
-  return notification;
+export async function createOwnerNotification(input: OrganizationNotificationInput) {
+  const users = await prisma.user.findMany({
+    where: { organizationId: input.organizationId, role: 'HOSTEL_ADMIN', status: 'ACTIVE' },
+    select: { id: true },
+  });
+  const notifications = await Promise.all(users.map((user) => prisma.notification.create({
+    data: {
+      title: input.title, message: input.message, type: input.type, organizationId: input.organizationId,
+      userId: user.id, branchId: input.branchId, tenantId: input.tenantId,
+      applicationId: input.applicationId, paymentId: input.paymentId,
+    },
+  })));
+  notifications.forEach((notification, index) => {
+    void sendPushToUser({ ...input, userId: users[index].id, notificationId: notification.id })
+      .catch((error) => console.error('Send hostel administrator push notification error:', error));
+  });
+  return notifications[0] || null;
 }
