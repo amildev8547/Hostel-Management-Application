@@ -180,6 +180,28 @@ All API endpoints are prefixed with `/api`.
 
 ## Deployment Guide
 
+### Existing Render multi-tenant cutover
+
+Keep the current `DATABASE_URL` and Cloudinary/Razorpay variables. Before changing the deployed branch, create a MongoDB Atlas snapshot and add these Render environment variables:
+
+```env
+JWT_ACCESS_SECRET=<generate at least 48 random characters>
+ALLOWED_ORIGINS=https://hostel-management-application-9xxh.onrender.com
+SUPER_ADMIN_EMAIL=<platform administrator email>
+SUPER_ADMIN_NAME=HostelHub Super Admin
+SUPER_ADMIN_PASSWORD=<temporary password with at least 12 characters>
+```
+
+Configure the Render service commands as follows:
+
+```text
+Build command: npm install && npx prisma generate && npm run build
+Pre-deploy command: npm run deploy:schema && npm run migrate:organizations
+Start command: npm start
+```
+
+The migration is idempotent. It assigns the existing owner and all current business data to the first organization, preserves public links and Cloudinary document URLs, creates the platform Super Admin, and verifies that no business record remains without an organization. After `/health` and `/health/db` pass, sign in as the Super Admin and reset the migrated Hostel Admin's access so the old single-owner password is no longer used.
+
 ### Backend Deployment (e.g. Render, AWS, Heroku)
 1. Provision a production MongoDB cluster on **MongoDB Atlas** and configure a database user.
 2. Create a **Cloudinary** account to copy your Cloud Name, API Key, and API Secret.
