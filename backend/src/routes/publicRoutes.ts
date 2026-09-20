@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import prisma from '../config/db';
 import { issueAdmissionFormToken } from '../services/admissionFormSecurity';
 import { formatDate } from '../utils/date';
+import { effectiveRoomType } from '../utils/roomType';
 
 const router = Router();
 
@@ -79,23 +80,25 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], limitPublicFormLoads, as
 
     const formToken = await issueAdmissionFormToken(branchId, booking?.secureToken);
 
-    // Build a roomType -> cheapest admissionFee map so the displayed fee always matches
+    // Build a share type -> cheapest admissionFee map so the displayed fee always matches
     // real room pricing instead of a hardcoded flat number.
     const rooms = await prisma.room.findMany({
       where: { branchId },
-      select: { roomType: true, admissionFee: true, monthlyRent: true },
+      select: { roomType: true, capacity: true, admissionFee: true, monthlyRent: true },
       orderBy: { admissionFee: 'asc' },
     });
     const roomFeeMap: Record<string, number> = {};
     const roomRentMap: Record<string, number> = {};
     let cheapestOverall = 1500;
     for (const room of rooms) {
-      if (!(room.roomType in roomFeeMap)) {
-        roomFeeMap[room.roomType] = room.admissionFee;
-        roomRentMap[room.roomType] = room.monthlyRent;
+      const shareType = effectiveRoomType(room.roomType, room.capacity);
+      if (!(shareType in roomFeeMap)) {
+        roomFeeMap[shareType] = room.admissionFee;
+        roomRentMap[shareType] = room.monthlyRent;
       }
       cheapestOverall = Math.min(cheapestOverall, room.admissionFee);
     }
+    const bookedShareType = booking ? effectiveRoomType(booking.room.roomType, booking.room.capacity) : '';
 
     // Serve a beautiful self-contained HTML page
     res.send(`
@@ -447,7 +450,7 @@ router.get(['/apply/:branchId', '/book/:bookingToken'], limitPublicFormLoads, as
               <div class="form-group">
                 <label for="preferredRoomType">Preferred Room Type *</label>
                 <select id="preferredRoomType" required ${booking ? 'disabled' : ''}>
-                  ${Object.keys(roomFeeMap).map((type) => `<option value="${escapeHtml(type)}" ${booking?.room.roomType === type ? 'selected' : ''}>${escapeHtml(type.replace('Share', 'people'))} · ₹${escapeHtml(roomRentMap[type])}/month</option>`).join('')}
+                  ${Object.keys(roomFeeMap).map((type) => `<option value="${escapeHtml(type)}" ${bookedShareType === type ? 'selected' : ''}>${escapeHtml(type.replace('Share', 'people'))} · ₹${escapeHtml(roomRentMap[type])}/month</option>`).join('')}
                 </select>
               </div>
               <div class="form-group">

@@ -7,6 +7,7 @@ import { buildUpiPaymentUrl, getSettingValue } from '../utils/upi';
 import { ensureCurrentMonthRentInvoice, getCalendarMonthRange } from '../utils/rentBilling';
 import { createOwnerNotification } from '../services/notifications';
 import { claimAdmissionFormToken } from '../services/admissionFormSecurity';
+import { effectiveRoomType, preferredRoomTypeFilter } from '../utils/roomType';
 
 // Public endpoint: Submit application
 export async function submitAdmissionApplication(req: Request, res: Response) {
@@ -100,7 +101,7 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
     // pay whatever they want by editing the request.
     currentStep = 'checking room pricing';
     const matchingRoom = booking?.room || await prisma.room.findFirst({
-      where: { branchId: selectedBranchId, roomType: preferredRoomType },
+      where: { branchId: selectedBranchId, ...preferredRoomTypeFilter(preferredRoomType) },
       orderBy: { admissionFee: 'asc' },
     });
     const fallbackRoom = matchingRoom
@@ -143,7 +144,9 @@ export async function submitAdmissionApplication(req: Request, res: Response) {
         nearestPoliceStation,
         occupation,
         workLocation,
-        preferredRoomType: booking?.room.roomType || preferredRoomType,
+        preferredRoomType: booking
+          ? effectiveRoomType(booking.room.roomType, booking.room.capacity)
+          : preferredRoomType,
         joiningDate: booking?.expectedJoiningDate || new Date(joiningDate),
         leavingDate: leavingDate ? new Date(leavingDate) : null,
         profilePhotoUrl: profileUpload.url,
@@ -382,7 +385,7 @@ export async function changeAdmissionFeeStatus(req: AuthenticatedRequest, res: R
     let payment = application.payments.find((item) => item.paymentType === 'ADMISSION');
     if (!payment) {
       const room = await prisma.room.findFirst({
-        where: { branchId: application.branchId, roomType: application.preferredRoomType },
+        where: { branchId: application.branchId, ...preferredRoomTypeFilter(application.preferredRoomType) },
         orderBy: { admissionFee: 'asc' },
       }) || await prisma.room.findFirst({
         where: { branchId: application.branchId },
